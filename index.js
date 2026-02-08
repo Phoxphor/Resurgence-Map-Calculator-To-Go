@@ -527,17 +527,32 @@ canvas.addEventListener('touchmove', function(e) {
 }, { passive: false });
 
 canvas.addEventListener('touchend', function(e) {
+    const currentTime = Date.now();
+    const tapLength = currentTime - lastTapTime;
     touchDragging = false;
     pinchZooming = false;
 
-    // Handle Taps for Markers
+    const p = getCanvasPoint(e);
+    mouseX = p.x;
+    mouseY = p.y;
+    const mapPos = screenToMap(p.x, p.y);
+
+    // --- DOUBLE TAP LOGIC ---
+    if (tapLength < 300 && tapLength > 0) {
+        const m = getMarkerAtPos(mapPos.x, mapPos.y);
+        if (m && (m.type === 'AIRDROP' || m.type === 'PLAYER')) {
+            markers = markers.filter(mark => mark !== m);
+            if (activeTarget === m) activeTarget = null;
+            saveAndRender();
+            lastTapTime = 0; // Reset so a third tap doesn't trigger another delete
+            return; // Stop here so we don't accidentally place a new marker
+        }
+    }
+    lastTapTime = currentTime;
+
+    // --- SINGLE TAP / PLACEMENT LOGIC ---
     if (!isDragging && e.changedTouches.length === 1) {
-        const p = getCanvasPoint(e);
-        mouseX = p.x;
-        mouseY = p.y;
-        
         if (isWaitingForLocationClick) {
-            const mapPos = screenToMap(p.x, p.y);
             const myC = getGameCoords(mapPos.x, mapPos.y);
             const playerMark = { x: mapPos.x, y: mapPos.y, type: 'PLAYER', label: "Me", gx: myC.x, gy: myC.y, timestamp: Date.now() };
             
