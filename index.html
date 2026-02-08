@@ -123,7 +123,8 @@
         }
         canvas#mapCanvas {
             display: block;
-            width: 100vw;
+            /* Remove width/height 100vw/100% to prevent CSS distortion of canvas bitmap */
+            width: 100%;
             height: 100%;
             touch-action: none;
         }
@@ -231,6 +232,46 @@
             location.reload();
         }
     }
+
+    // --- Added: Ensure canvas always matches map aspect ratio to prevent squashing ---
+    function resizeCanvasToWindow() {
+        const canvas = document.getElementById('mapCanvas');
+        // You must set these based on your actual map image's pixel width/height
+        // For example, if your mapImg is 2048x2048 or 1920x1080, set accordingly
+        const MAP_WIDTH = 2048;   // <-- change to your map image's width in px
+        const MAP_HEIGHT = 2048;  // <-- and your map image's height in px
+
+        let vw = document.getElementById('map-viewport').clientWidth;
+        let vh = document.getElementById('map-viewport').clientHeight;
+
+        // Calculate target aspect
+        let mapAspect = MAP_WIDTH / MAP_HEIGHT;
+        let viewAspect = vw / vh;
+        
+        let drawWidth, drawHeight;
+        if (viewAspect > mapAspect) {
+            // Window is too wide, fit by height
+            drawHeight = vh;
+            drawWidth = vh * mapAspect;
+        } else {
+            // Window is too tall, fit by width
+            drawWidth = vw;
+            drawHeight = vw / mapAspect;
+        }
+
+        // Round to integer pixels to avoid blur on some displays
+        canvas.width = Math.round(drawWidth);
+        canvas.height = Math.round(drawHeight);
+
+        // For best canvas display: set style width/height to 100% of parent, 
+        // but actual drawing will be mapAspect correct.
+        canvas.style.width = "100%";
+        canvas.style.height = "100%";
+    }
+
+    window.addEventListener('resize', resizeCanvasToWindow);
+    window.addEventListener('DOMContentLoaded', resizeCanvasToWindow);
+
 </script>
 </body>
 </html>
