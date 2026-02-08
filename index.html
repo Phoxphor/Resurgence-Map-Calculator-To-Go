@@ -2,13 +2,15 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <!-- Allow pinch zoom for fine control, but keep scale 1 on load -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
     <title>Resurgence Map Calculator To Go</title>
     <style>
         html, body {
             margin: 0; padding: 0; height: 100%; width: 100%;
             background: #1a1a1a; color: #fff; font-family: sans-serif;
-            touch-action: pan-x pan-y; -webkit-tap-highlight-color: transparent;
+            touch-action: none; /* Prevent scrolling, let us handle panning */
+            -webkit-tap-highlight-color: transparent;
             overflow: hidden;
         }
         body {
@@ -38,7 +40,7 @@
             display: flex; flex-direction: column; gap: 6px; align-items: flex-start;
         }
         #sidebar .right-group {
-            display: none; /* Remove from DOM, no longer used */
+            display: none;
         }
         #sidebar .left-group {
             flex-basis: auto;
@@ -118,13 +120,14 @@
             width: 100vw;
             height: 100%;
             background: #000;
-            overflow: auto;
+            overflow: hidden;
             touch-action: none;
             display: flex;
             align-items: center;
             justify-content: center;
         }
-        /* On mobile, center and make the map a fixed pixel size, allow scrolling */
+
+        /* On mobile, make the viewport scrollable and canvas large, but responsive+sharp */
         @media (max-width: 749px) {
             #map-viewport {
                 align-items: flex-start;
@@ -133,14 +136,17 @@
                 overflow-y: auto;
                 width: 100vw;
                 height: 100%;
+                touch-action: none;
             }
             canvas#mapCanvas {
                 display: block;
                 max-width: none;
                 max-height: none;
-                width: 2048px !important;
-                height: 2048px !important;
-                /* Replace above with your actual map size if different */
+                width: 100vw !important;
+                height: calc(100vw * 1052 / 1603) !important;
+                min-width: 100vw;
+                min-height: calc(100vw * 1052 / 1603);
+                aspect-ratio: 1603/1052;
                 box-shadow: 0 0 20px rgba(0,0,0,0.48);
                 margin: 0;
                 touch-action: none;
@@ -168,14 +174,15 @@
             canvas#mapCanvas {
                 width: 100%;
                 height: 100%;
+                aspect-ratio: 1603/1052;
             }
         }
         canvas#mapCanvas {
             display: block;
             background: #000;
             touch-action: none;
+            user-select: none;
         }
-        /* Large touch targets (material style) */
         .control-btn, .obj-btn {
             min-width: 48px; min-height: 48px;
         }
@@ -184,13 +191,10 @@
             width: 100%;
         }
 
-        /* Hide scrollbar on sidebar & info panels on mobile for max map room */
         #sidebar, #cal-info { scrollbar-width: none; }
         #sidebar::-webkit-scrollbar, #cal-info::-webkit-scrollbar { display: none; }
 
-        /* Add a bit more touch feedback */
         .control-btn:active, .obj-btn:active { filter: brightness(1.4); }
-
     </style>
 </head>
 <body>
@@ -251,33 +255,43 @@
         if (typeof window.resetAllMarkers === "function") {
             window.resetAllMarkers();
         } else if (typeof resetMarkers === "function") {
-            resetMarkers(); // in case user defined it like this
+            resetMarkers();
         } else {
-            // fallback: reload page
             location.reload();
         }
     }
 
-    // --- Ensure canvas always matches map aspect ratio on desktop, 
-    // and stays at original pixel size on mobile with scroll if needed ---
+    // --- Make canvas responsive and always SHARP on mobile (devicePixelRatio) ---
     function resizeCanvasToWindow() {
         const canvas = document.getElementById('mapCanvas');
-        const MAP_WIDTH = 2048;   // Set to your map's real width in px
-        const MAP_HEIGHT = 2048;  // Set to your map's real height in px
+        const MAP_WIDTH = 1603;   // Map real px width
+        const MAP_HEIGHT = 1052;  // Map real px height
 
-        // On mobile: keep canvas always at original size, use scroll if needed
         if (window.innerWidth < 750) {
-            // Physically fix canvas size
-            canvas.width = MAP_WIDTH;
-            canvas.height = MAP_HEIGHT;
-            canvas.style.width = MAP_WIDTH + 'px';
-            canvas.style.height = MAP_HEIGHT + 'px';
-            // viewport handles scrolling
+            // Mobile: Fill screen width, physically size to devicePixelRatio for sharpness, keep scroll
+            const devicePixelRatio = window.devicePixelRatio || 1;
+            const displayW = window.innerWidth;
+            // Keep aspect ratio 1603/1052
+            const aspect = MAP_HEIGHT / MAP_WIDTH;
+            const displayH = Math.round(displayW * aspect);
+
+            canvas.style.width = `${displayW}px`;
+            canvas.style.height = `${displayH}px`;
+
+            // Set internal buffer size for sharpness
+            canvas.width = Math.round(displayW * devicePixelRatio);
+            canvas.height = Math.round(displayH * devicePixelRatio);
+
+            // Optional: scale drawing context so index.js rendering is pixel-perfect.
+            if (canvas.getContext) {
+                const ctx = canvas.getContext('2d');
+                ctx.setTransform(1, 0, 0, 1, 0, 0); // reset
+                ctx.scale(canvas.width / MAP_WIDTH, canvas.height / MAP_HEIGHT);
+            }
         } else {
-            // On desktop: scale to fit aspect
+            // Desktop: existing responsive behavior with correct aspect
             let vw = document.getElementById('map-viewport').clientWidth;
             let vh = document.getElementById('map-viewport').clientHeight;
-
             let mapAspect = MAP_WIDTH / MAP_HEIGHT;
             let viewAspect = vw / vh;
             let drawWidth, drawHeight;
@@ -288,15 +302,141 @@
                 drawWidth = vw;
                 drawHeight = vw / mapAspect;
             }
-            canvas.width = Math.round(drawWidth);
-            canvas.height = Math.round(drawHeight);
+            // Use device pixel ratio for sharp desktop render on retina
+            const devicePixelRatio = window.devicePixelRatio || 1;
+            canvas.width = Math.round(drawWidth * devicePixelRatio);
+            canvas.height = Math.round(drawHeight * devicePixelRatio);
             canvas.style.width = "100%";
             canvas.style.height = "100%";
+            if (canvas.getContext) {
+                const ctx = canvas.getContext('2d');
+                ctx.setTransform(1, 0, 0, 1, 0, 0);
+                ctx.scale(canvas.width / MAP_WIDTH, canvas.height / MAP_HEIGHT);
+            }
         }
     }
 
     window.addEventListener('resize', resizeCanvasToWindow);
     window.addEventListener('DOMContentLoaded', resizeCanvasToWindow);
+
+    // --- Touch & gesture support for panning and zooming on mobile ---
+    (function enableTouchMapControls() {
+        const canvas = document.getElementById('mapCanvas');
+        let isDragging = false;
+        let lastX = 0;
+        let lastY = 0;
+        let offsetX = 0;
+        let offsetY = 0;
+        let startOffsetX = 0;
+        let startOffsetY = 0;
+        let initialPinchDistance = null;
+        let scale = 1;
+        let lastScale = 1;
+        const minScale = 1;
+        const maxScale = 4;
+
+        // You will need to adjust all marker/object translation in index.js to respect these offsets/scale!
+        // This code just allows panning/zooming, but you must use offsetX, offsetY, scale in your drawing logic.
+
+        function redraw() {
+            // Dummy: instruct index.js to redraw with new offset/scale
+            // You must implement in index.js something like: window.setMapView({offsetX, offsetY, scale});
+            if(window.setMapView) window.setMapView({offsetX, offsetY, scale});
+        }
+
+        // Pan
+        canvas.addEventListener('touchstart', function(e) {
+            if (e.touches.length === 1) {
+                isDragging = true;
+                lastX = e.touches[0].clientX;
+                lastY = e.touches[0].clientY;
+                startOffsetX = offsetX;
+                startOffsetY = offsetY;
+            } else if (e.touches.length === 2) {
+                isDragging = false;
+                // Pinch
+                const dx = e.touches[0].clientX - e.touches[1].clientX;
+                const dy = e.touches[0].clientY - e.touches[1].clientY;
+                initialPinchDistance = Math.sqrt(dx*dx + dy*dy);
+                lastScale = scale;
+            }
+            e.preventDefault();
+        }, {passive: false});
+
+        canvas.addEventListener('touchmove', function(e) {
+            if (isDragging && e.touches.length === 1) {
+                let dx = e.touches[0].clientX - lastX;
+                let dy = e.touches[0].clientY - lastY;
+                offsetX = startOffsetX + dx / scale;
+                offsetY = startOffsetY + dy / scale;
+                redraw();
+            } else if (e.touches.length === 2 && initialPinchDistance !== null) {
+                const dx = e.touches[0].clientX - e.touches[1].clientX;
+                const dy = e.touches[0].clientY - e.touches[1].clientY;
+                const newDist = Math.sqrt(dx*dx + dy*dy);
+                let newScale = Math.max(minScale, Math.min(maxScale, lastScale * newDist / initialPinchDistance));
+                scale = newScale;
+                redraw();
+            }
+            e.preventDefault();
+        }, {passive: false});
+
+        canvas.addEventListener('touchend', function(e) {
+            isDragging = false;
+            initialPinchDistance = null;
+        });
+
+        // Mouse fallback (desktop)
+        let mouseDown = false, mouseLastX = 0, mouseLastY = 0, mouseStartOffsetX = 0, mouseStartOffsetY = 0;
+        canvas.addEventListener('mousedown', function(e) {
+            mouseDown = true;
+            mouseLastX = e.clientX;
+            mouseLastY = e.clientY;
+            mouseStartOffsetX = offsetX;
+            mouseStartOffsetY = offsetY;
+        });
+        window.addEventListener('mousemove', function(e) {
+            if (mouseDown) {
+                offsetX = mouseStartOffsetX + (e.clientX - mouseLastX)/scale;
+                offsetY = mouseStartOffsetY + (e.clientY - mouseLastY)/scale;
+                redraw();
+            }
+        });
+        window.addEventListener('mouseup', function(e) {
+            mouseDown = false;
+        });
+
+        // Double tap to reset view
+        let tapTimeout = null;
+        canvas.addEventListener('touchend', function(e) {
+            if (e.touches.length === 0) {
+                if (tapTimeout !== null) {
+                    // Double tap detected
+                    offsetX = 0;
+                    offsetY = 0;
+                    scale = 1;
+                    redraw();
+                    clearTimeout(tapTimeout);
+                    tapTimeout = null;
+                } else {
+                    tapTimeout = setTimeout(() => tapTimeout = null, 300);
+                }
+            }
+        });
+
+        // Prevent default scroll/zoom on mobile gestures
+        canvas.addEventListener('wheel', function(e) {
+            if (e.ctrlKey) { // pinch zoom gesture (desktop/mobile)
+                let delta = -e.deltaY/100;
+                scale = Math.max(minScale, Math.min(maxScale, scale + delta * 0.2));
+                redraw();
+                e.preventDefault();
+            }
+        }, { passive: false });
+
+        // Expose these values for use in your map rendering (index.js)
+        window.getMapTransform = () => ({offsetX, offsetY, scale});
+    })();
 </script>
 </body>
 </html>
