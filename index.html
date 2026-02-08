@@ -15,60 +15,64 @@
         #topbar {
             background:#232; color:#fff;
             display:flex; flex-direction:column; align-items:center; justify-content:center;
-            gap:2px;
+            gap:6px;
             border-bottom:1px solid #333;
-            min-height:64px;
+            min-height:120px;
+            height:25vh;
             width:100vw;
             box-sizing:border-box;
             z-index:20;
             position:relative;
-            padding:8px 6px 2px 6px;
+            padding:18px 8px 6px 8px;
         }
         .mini-title {
-            font-size:1.1rem;
+            font-size:2.8rem;
             color:#6AD44C;
-            letter-spacing:1px;
+            letter-spacing:2px;
             font-weight:bold;
             text-transform:uppercase;
             user-select:none;
-            opacity:.93;
+            opacity:.98;
+            line-height:1.1;
+            margin-bottom:2px;
         }
         .sub-title {
-            font-size:0.86rem;
+            font-size:1.35rem;
             color:#aaa;
-            margin-top:1px;
+            margin-top:0.5em;
             line-height:1.2;
             text-align:center;
         }
         .button-group {
-            display:flex; flex-direction:row; gap:6px; width:auto; align-items:center; margin:4px 0 0 0;
+            display:flex; flex-direction:row; gap:24px; width:auto; align-items:center; margin:18px 0 0 0;
             justify-content:center;
         }
         .ctrl-ico {
-            width:32px; height:32px; min-width:32px; min-height:32px;
+            width:72px; height:72px; min-width:72px; min-height:72px;
             border:none; outline:none; border-radius:50%;
             cursor:pointer;
             display:flex; align-items:center; justify-content:center;
             background:#252525;
-            transition:background .14s, box-shadow .14s;
-            font-size:1.05rem;
+            transition:background .13s, box-shadow .13s, transform .11s;
+            font-size:2.4rem;
             margin:0 0;
             box-sizing:border-box;
+            box-shadow:0 4px 18px #0004;
         }
-        .ctrl-ico:hover, .ctrl-ico:active { background:#363; box-shadow:0 2px 8px #161; }
+        .ctrl-ico:hover, .ctrl-ico:active { background:#363; box-shadow:0 6px 22px #161b; transform:scale(1.06);}
         .ctrl-ico[data-color="gold"] { background:#4e4010; color:#ffe700;}
         .ctrl-ico[data-color="green"] { background:#2b4d24; color:#6AD44C;}
         .ctrl-ico[data-color="blue"] { background:#273651; color:#7bdfff;}
         .ctrl-ico[data-color="gray"] { background:#444; color:#fff;}
         #cal-info {
-            font-size:0.65rem;
-            padding:2px 4px;
+            font-size:1.1rem;
+            padding:4px 10px;
             background:#000a; color:#6AD44C;
-            border-radius:5px;
-            min-height:24px; max-width:48px; box-sizing:border-box;
+            border-radius:8px;
+            min-height:32px; max-width:68px; box-sizing:border-box;
             text-align:center;
-            border:1px solid #3b403a;
-            margin-left:10px;
+            border:1.7px solid #3b403a;
+            margin-left:16px;
             margin-right:0;
             margin-top:0;
             line-height:1.25;
@@ -76,19 +80,29 @@
             overflow:hidden;
             white-space:nowrap;
         }
+        @media (max-width:1200px) {
+            #topbar { min-height:90px; height:18vh; padding:12px 6px 4px 6px;}
+            .mini-title { font-size:2.2rem; }
+            .ctrl-ico { width:58px; height:58px; min-width:58px; min-height:58px; font-size:1.8rem;}
+            .button-group { gap:16px; }
+            #cal-info { font-size:0.93rem; min-height:22px; max-width:58px;}
+            .sub-title { font-size:1.04rem; }
+        }
         @media (max-width:800px) {
-            #topbar { min-height:44px; padding-top:3px; padding-bottom:0; }
-            .ctrl-ico { width:28px; height:28px; min-width:28px; min-height:28px; font-size:0.92rem; }
-            #cal-info { font-size:0.55rem; max-width:36px;}
-            .mini-title { font-size:0.91rem; }
+            #topbar { min-height:70px; height:16vh; padding:6px 3px 2px 3px;}
+            .mini-title { font-size:1.58rem; }
+            .ctrl-ico { width:42px; height:42px; min-width:42px; min-height:42px; font-size:1.18rem;}
+            .button-group { gap:9px; }
+            #cal-info { font-size:0.7rem; min-height:14px; max-width:38px;}
+            .sub-title { font-size:0.82rem; }
         }
         @media (max-width:550px) {
-            #topbar { min-height:37px; padding-top:2px; padding-bottom:0; }
-            .ctrl-ico { width:22px; height:22px; min-width:22px; min-height:22px; font-size:0.8rem; }
-            .mini-title { font-size:0.77rem; }
-            .sub-title { font-size:0.6rem; }
-            #cal-info { font-size:0.5rem; max-width:27px; padding:1px;}
+            #topbar { min-height:62px; height:14vh; padding:2px 1px 0 1px;}
+            .mini-title { font-size:1.15rem; }
+            .sub-title { font-size:0.61rem; }
+            .ctrl-ico { width:32px; height:32px; min-width:32px; min-height:32px; font-size:0.9rem;}
             .button-group { gap:3px;}
+            #cal-info { font-size:0.5rem; min-height:10px; max-width:27px; padding:1px;}
         }
         #map-viewport { flex-grow:1; overflow:hidden; background:#000; position:relative; touch-action:none; }
         canvas { display:block; touch-action:none; }
