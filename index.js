@@ -31,6 +31,7 @@ let view = { x: 0, y: 0, zoom: 0.8 };
 let targetView = { x: 0, y: 0, zoom: 0.8 };
 let isDragging = false;
 let lastMouseX = 0, lastMouseY = 0;
+let lastLeftClickTime = 0, leftClickCount = 0, lastLeftClickMarker = null;
 
 const colors = {
     GREEN: '#6AD44C', BLUE: '#4C92D4', RED: '#EB564F',
@@ -397,6 +398,30 @@ canvas.addEventListener('mousedown', (e) => {
         }
     }
 
+    // Triple left-click to delete AIRDROP/PLAYER (same as right-click)
+    if (e.button === 0 && m && (m.type === 'AIRDROP' || m.type === 'PLAYER')) {
+        const now = Date.now();
+        if (now - lastLeftClickTime < 500 && lastLeftClickMarker === m) {
+            leftClickCount++;
+        } else {
+            leftClickCount = 1;
+            lastLeftClickMarker = m;
+        }
+        lastLeftClickTime = now;
+        if (leftClickCount >= 3) {
+            markers = markers.filter(mark => mark !== m);
+            if (activeTarget === m) activeTarget = null;
+            saveAndRender();
+            leftClickCount = 0;
+            lastLeftClickMarker = null;
+            return;
+        }
+        if (leftClickCount >= 2) return; // don't start drag on 2nd click of triple
+    } else {
+        leftClickCount = 0;
+        lastLeftClickMarker = null;
+    }
+
     if (e.button === 1 || (e.button === 0)) {
         isDragging = true;
         lastMouseX = e.clientX;
@@ -466,12 +491,6 @@ let pinchStartViewX = 0;
 let pinchStartViewY = 0;
 let pinchMidpoint = { x: 0, y: 0 };
 
-// For hold-to-delete logic
-let mobileHoldTimeout = null;
-let mobileHoldTarget = null;
-let holdActive = false;
-const HOLD_DURATION = 500; // ms required holding to trigger delete
-
 // Helper: distance between two touches
 function getDistance(t0, t1) {
     return Math.sqrt((t1.clientX - t0.clientX) ** 2 + (t1.clientY - t0.clientY) ** 2);
@@ -486,29 +505,13 @@ function getMidpoint(t0, t1) {
 
 canvas.addEventListener('touchstart', function (e) {
     if (e.touches.length === 1) {
-        // Single-finger: drag or tap or hold
+        // Single-finger: drag or tap
         const { x, y } = pointerToCanvas(e);
         mouseX = x;
         mouseY = y;
         lastTouchX = e.touches[0].clientX;
         lastTouchY = e.touches[0].clientY;
         touchDragging = true;
-
-        // Start hold-to-delete logic
-        const mapPos = screenToMap(x, y);
-        const m = getMarkerAtPos(mapPos.x, mapPos.y);
-        mobileHoldTarget = m;
-        holdActive = false;
-        if (m && (m.type === "AIRDROP" || m.type === "PLAYER")) {
-            mobileHoldTimeout = setTimeout(() => {
-                // Actually delete marker on hold
-                markers = markers.filter(mark => mark !== m);
-                if (activeTarget === m) activeTarget = null;
-                saveAndRender();
-                mobileHoldTarget = null;
-                holdActive = true;
-            }, HOLD_DURATION);
-        }
     }
     if (e.touches.length === 2) {
         pinchZooming = true;
@@ -525,20 +528,7 @@ canvas.addEventListener('touchstart', function (e) {
 canvas.addEventListener('touchmove', function(e) {
     e.preventDefault();
     const p = getCanvasPoint(e);
-
-    // Cancel hold-to-delete if finger moves a lot
-    if (mobileHoldTimeout && e.touches && e.touches.length === 1) {
-        // If movement is large, cancel
-        const dx = e.touches[0].clientX - lastTouchX;
-        const dy = e.touches[0].clientY - lastTouchY;
-        if (Math.abs(dx) > 10 || Math.abs(dy) > 10) {
-            clearTimeout(mobileHoldTimeout);
-            mobileHoldTimeout = null;
-            mobileHoldTarget = null;
-            holdActive = false;
-        }
-    }
-
+    
     // Updates HUD text position
     mouseX = p.x; 
     mouseY = p.y;
@@ -567,37 +557,10 @@ canvas.addEventListener('touchend', function(e) {
     touchDragging = false;
     pinchZooming = false;
 
-    // Cancel hold-to-delete timeout if present
-    if (mobileHoldTimeout) {
-        clearTimeout(mobileHoldTimeout);
-        mobileHoldTimeout = null;
-    }
-
-    // Prevent placement if hold was triggered
-    if (holdActive) {
-        holdActive = false;
-        mobileHoldTarget = null;
-        lastTapTime = currentTime;
-        return;
-    }
-
     const p = getCanvasPoint(e);
     mouseX = p.x;
     mouseY = p.y;
     const mapPos = screenToMap(p.x, p.y);
-
-    // --- DOUBLE TAP LOGIC ---
-    if (tapLength < 300 && tapLength > 0) {
-        const m = getMarkerAtPos(mapPos.x, mapPos.y);
-        if (m && (m.type === 'AIRDROP' || m.type === 'PLAYER')) {
-            markers = markers.filter(mark => mark !== m);
-            if (activeTarget === m) activeTarget = null;
-            saveAndRender();
-            lastTapTime = 0; // Reset so a third tap doesn't trigger another delete
-            return; // Stop here so we don't accidentally place a new marker
-        }
-    }
-    lastTapTime = currentTime;
 
     // --- SINGLE TAP / PLACEMENT LOGIC ---
     if (!isDragging && e.changedTouches.length === 1) {
