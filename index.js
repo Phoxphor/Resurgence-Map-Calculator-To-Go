@@ -271,16 +271,11 @@ function addAirdrop() {
         pendingAirdropCalculation = true;
         isWaitingForLocationClick = true;
         // Auto-zoom removed: no longer zoom to the airdrop marker
-        document.getElementById('cal-info').innerText = "AIRDROP ADDED. TAP YOUR POSITION.";
+        document.getElementById('cal-info').innerText = "AIRDROP ADDED.";
     }
 }
 
-function findNearest() {
-    pendingAirdropCalculation = false;
-    isWaitingForLocationClick = true;
-    activeTarget = null;
-    document.getElementById('cal-info').innerText = (window.innerWidth<=700?"Tap":"Click") + " your position...";
-}
+// findNearest removed as per instruction
 
 function showObjectiveMenu() {
     const statusBox = document.getElementById('cal-info');
@@ -555,10 +550,9 @@ function render() {
 
     ctx.setTransform(1, 0, 0, 1, 0, 0);
 
-    let hudText = isWaitingForLocationClick ?
-        ((window.innerWidth <= 700 ? "Tap" : "Click") + " your position") :
-        `X: ${g.x}, Y: ${g.y}`;
-    let hudColor = isWaitingForLocationClick ? "#00ffff" : "#6AD44C";
+    // ======== CHANGED: Remove "Click your position"/"Tap your position", only show XY or LOCKED ========
+    let hudText = `X: ${g.x}, Y: ${g.y}`;
+    let hudColor = "#6AD44C";
 
     if (hovered && typeof hovered.gx === 'number' && typeof hovered.gy === 'number' && !isNaN(hovered.gx) && !isNaN(hovered.gy)) {
         hudText = `LOCKED: ${hovered.gx}, ${hovered.gy}`;
