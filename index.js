@@ -6,9 +6,9 @@ const mapImg = new Image();
 mapImg.src = 'Map.jpg';
 
 /** CONFIG **/
-const PLAYER_SPEED = 48; 
+const PLAYER_SPEED = 48;
 const HUMAN_ERROR_BUFFER = 1.5;
-const MIN_ZOOM = 0.2; 
+const MIN_ZOOM = 0.2;
 const MAX_ZOOM = 5.0;
 
 /** MASTER LANDMARKS PORT **/
@@ -34,11 +34,20 @@ let lastMouseX = 0, lastMouseY = 0;
 let lastTouchDistance = null;
 let lastCenter = null;
 
-const colors = { 
-    GREEN: '#6AD44C', BLUE: '#4C92D4', RED: '#EB564F', 
-    SAFE: '#F3E57A', BRIEF: '#714E2E', EXTRACT: '#AD30D3', 
-    LOCATION: '#ffffff', AIRDROP: '#ffff00', PLAYER: '#00ffff' 
+const colors = {
+    GREEN: '#6AD44C', BLUE: '#4C92D4', RED: '#EB564F',
+    SAFE: '#F3E57A', BRIEF: '#714E2E', EXTRACT: '#AD30D3',
+    LOCATION: '#ffffff', AIRDROP: '#ffff00', PLAYER: '#00ffff'
 };
+
+// --- Marker Size Configuration ---
+const MARKER_BASE_RADIUS = 8;
+const MARKER_PULSE_MIN_RADIUS = 6;
+const MARKER_PULSE_MAX_RADIUS = 20;
+const MARKER_FONT_SIZE = 11;
+const MARKER_HIT_RADIUS = 18;
+const MARKER_LINE_WIDTH = 1.5;
+const MARKER_PULSE_LINE_WIDTH = 2.7;
 
 /** HELPER FUNCTIONS **/
 function formatTime(totalSeconds) {
@@ -58,7 +67,6 @@ function clampView() {
     const zoomedHeight = mapImg.height * targetView.zoom;
     let buffer = -100;
 
-    // On mobile (less than 600px width), increase peek buffer for better "edge swipe"
     if(window.innerWidth < 700) buffer = 0;
 
     const minX = buffer - zoomedWidth;
@@ -79,17 +87,16 @@ function adjustCanvasSizeForMobile() {
         document.getElementById('cal-info').style.fontSize = '1.1em';
         document.getElementById('cal-info').style.padding = '8px';
     } else {
-        // desktop
         canvas.width = window.innerWidth - 280;
         canvas.height = window.innerHeight;
         document.getElementById('cal-info').style.fontSize = '';
         document.body.style.overflow = '';
     }
 }
-mapImg.onload = () => { 
+mapImg.onload = () => {
     adjustCanvasSizeForMobile();
-    extractCoords(); 
-    saveAndRender(); 
+    extractCoords();
+    saveAndRender();
 };
 
 window.onresize = adjustCanvasSizeForMobile;
@@ -99,8 +106,8 @@ function screenToMap(sx, sy) {
 }
 
 function getMarkerAtPos(mapX, mapY) {
-    const baseRadius = 30; 
-    const hitRadius = Math.min(baseRadius / view.zoom, 60); 
+    const baseRadius = MARKER_HIT_RADIUS;
+    const hitRadius = Math.min(baseRadius / view.zoom, 40);
     const candidates = markers.filter(m => Math.sqrt((mapX - m.x)**2 + (mapY - m.y)**2) < hitRadius);
     if (candidates.length === 0) return null;
     const priority = candidates.find(m => m.type === 'PLAYER' || m.type === 'AIRDROP');
@@ -108,15 +115,119 @@ function getMarkerAtPos(mapX, mapY) {
     return candidates[0];
 }
 
+function animateZoomToFit(p1, p2, duration = 600, customZoom=null) {
+    const padding = 200;
+    const centerX = (p1.x + p2.x) / 2;
+    const centerY = (p1.y + p2.y) / 2;
+    const dx = Math.abs(p1.x - p2.x);
+    const dy = Math.abs(p1.y - p2.y);
+
+    let zoomX = (canvas.width - padding) / (dx || 1);
+    let zoomY = (canvas.height - padding) / (dy || 1);
+    let newZoom;
+
+    if (customZoom !== null && !isNaN(customZoom)) {
+        newZoom = Math.max(MIN_ZOOM, Math.min(customZoom, MAX_ZOOM));
+    } else {
+        newZoom = Math.min(zoomX, zoomY, 1.2);
+        newZoom = Math.max(newZoom, MIN_ZOOM);
+    }
+
+    const newX = (canvas.width / 2) - (centerX * newZoom);
+    const newY = (canvas.height / 2) - (centerY * newZoom);
+
+    const start = { x: view.x, y: view.y, zoom: view.zoom };
+    const end = { x: newX, y: newY, zoom: newZoom };
+    const tviewStart = { x: targetView.x, y: targetView.y, zoom: targetView.zoom };
+    const startTime = performance.now();
+
+    function easeInOut(t) {
+        return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+    }
+
+    function step(now) {
+        let t = Math.min(1, (now - startTime) / duration);
+        let e = easeInOut(t);
+        view.x = start.x + (end.x - start.x) * e;
+        view.y = start.y + (end.y - start.y) * e;
+        view.zoom = start.zoom + (end.zoom - start.zoom) * e;
+        targetView.x = tviewStart.x + (end.x - tviewStart.x) * e;
+        targetView.y = tviewStart.y + (end.y - tviewStart.y) * e;
+        targetView.zoom = tviewStart.zoom + (end.zoom - tviewStart.zoom) * e;
+        clampView();
+        if (t < 1) {
+            requestAnimationFrame(step);
+        } else {
+            view.x = end.x;
+            view.y = end.y;
+            view.zoom = end.zoom;
+            targetView.x = end.x;
+            targetView.y = end.y;
+            targetView.zoom = end.zoom;
+        }
+    }
+
+    requestAnimationFrame(step);
+}
+
+function zoomToAirdropSmooth(airdropMarker) {
+    // Center and smoothly zoom in to the given airdrop marker
+    if (!airdropMarker) return;
+    const padding = 120;
+    const targetZoom = Math.max(0.9, Math.min(Math.min(
+        canvas.width / 350,
+        canvas.height / 350
+    ), MAX_ZOOM));
+    const cx = airdropMarker.x;
+    const cy = airdropMarker.y;
+    const zoom = targetZoom;
+
+    const destX = (canvas.width / 2) - (cx * zoom);
+    const destY = (canvas.height / 2) - (cy * zoom);
+
+    const start = { x: view.x, y: view.y, zoom: view.zoom };
+    const end = { x: destX, y: destY, zoom };
+    const tviewStart = { x: targetView.x, y: targetView.y, zoom: targetView.zoom };
+    const startTime = performance.now();
+    const duration = 750; // Keep a bit slower for a nice "float" effect
+
+    function easeInOut(t) {
+        return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+    }
+
+    function step(now) {
+        let t = Math.min(1, (now - startTime) / duration);
+        let e = easeInOut(t);
+        view.x = start.x + (end.x - start.x) * e;
+        view.y = start.y + (end.y - start.y) * e;
+        view.zoom = start.zoom + (end.zoom - start.zoom) * e;
+        targetView.x = tviewStart.x + (end.x - tviewStart.x) * e;
+        targetView.y = tviewStart.y + (end.y - tviewStart.y) * e;
+        targetView.zoom = tviewStart.zoom + (end.zoom - tviewStart.zoom) * e;
+        clampView();
+        if (t < 1) {
+            requestAnimationFrame(step);
+        } else {
+            view.x = end.x;
+            view.y = end.y;
+            view.zoom = end.zoom;
+            targetView.x = end.x;
+            targetView.y = end.y;
+            targetView.zoom = end.zoom;
+        }
+    }
+    requestAnimationFrame(step);
+}
+
 function zoomToFit(p1, p2) {
-    const padding = 200; 
+    const padding = 200;
     const centerX = (p1.x + p2.x) / 2;
     const centerY = (p1.y + p2.y) / 2;
     const dx = Math.abs(p1.x - p2.x);
     const dy = Math.abs(p1.y - p2.y);
     let zoomX = (canvas.width - padding) / (dx || 1);
     let zoomY = (canvas.height - padding) / (dy || 1);
-    let newZoom = Math.min(zoomX, zoomY, 1.2); 
+    let newZoom = Math.min(zoomX, zoomY, 1.2);
     newZoom = Math.max(newZoom, MIN_ZOOM);
     targetView.zoom = newZoom;
     targetView.x = (canvas.width / 2) - (centerX * newZoom);
@@ -127,15 +238,41 @@ function zoomToFit(p1, p2) {
 function updateTacticalHUD(player, target) {
     const statusBox = document.getElementById('cal-info');
     activeTarget = target;
-    pulseEndTime = Date.now() + 15000; 
+    pulseEndTime = Date.now() + 15000;
+
+    // AIRDROP LOGIC FIX: If the airdrop or player is missing correct gx/gy (due to calibration, user input, or bad mapping), warn properly
+    if (
+        target &&
+        typeof target.gx !== 'number' ||
+        typeof target.gy !== 'number' ||
+        isNaN(target.gx) ||
+        isNaN(target.gy)
+    ) {
+        statusBox.innerHTML = `
+            <div style="text-align:center;color:#EB564F;padding:10px"><strong>ERROR:</strong><br>Invalid target coordinates for Airdrop or Objective. Please calibrate or input correct map co-ordinates.</div>
+        `;
+        return;
+    }
+
+    if (
+        player &&
+        typeof player.gx !== 'number' ||
+        typeof player.gy !== 'number' ||
+        isNaN(player.gx) ||
+        isNaN(player.gy)
+    ) {
+        statusBox.innerHTML = `
+            <div style="text-align:center;color:#EB564F;padding:10px"><strong>ERROR:</strong><br>Your position is invalid. Tap on the map to place yourself or calibrate.</div>
+        `;
+        return;
+    }
+
     const distToTarget = Math.sqrt((player.gx - target.gx)**2 + (player.gy - target.gy)**2);
     const direction = getDirection(player, target);
     const rawSeconds = Math.round((distToTarget / PLAYER_SPEED) * HUMAN_ERROR_BUFFER);
     const readableTime = formatTime(rawSeconds);
-    // Centered Objective display with Made by Phoxphor and RMC TO GO
     statusBox.innerHTML = `
         <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;">
-            <div style="font-weight:bold;font-size:1.2em;letter-spacing:2px;margin-bottom:3px;">RMC TO GO</div>
             <div style="font-size:0.95em;color:#6AD44C;text-align:center;">
                 <strong>OBJECTIVE:</strong><br>
                 ${getCleanName(target.label)}<br>
@@ -143,16 +280,29 @@ function updateTacticalHUD(player, target) {
                 <strong>RANGE:</strong> ${Math.round(distToTarget)}M<br>
                 <strong>ETA:</strong> ${readableTime}
             </div>
-            <div style="font-size:0.9em;margin-top:9px;color:#bbb;text-align:center;"><em>Made by Phoxphor</em></div>
         </div>
     `;
-    zoomToFit(player, target);
+    // If player and airdrop are at the same spot, still zoom to a reasonable default
+    if (
+        player &&
+        target &&
+        player.x === target.x &&
+        player.y === target.y
+    ) {
+        const targetZoom = Math.max(0.9, Math.min(Math.min(
+            canvas.width / 350,
+            canvas.height / 350
+        ), MAX_ZOOM));
+        animateZoomToFit(player, target, 600, targetZoom);
+    } else if (player && target) {
+        animateZoomToFit(player, target, 600);
+    }
 }
 
 function getDirection(from, to) {
-    const dNorth = to.gx - from.gx; 
-    const dEast = to.gy - from.gy;   
-    let angle = Math.atan2(dEast, dNorth) * (180 / Math.PI); 
+    const dNorth = to.gx - from.gx;
+    const dEast = to.gy - from.gy;
+    let angle = Math.atan2(dEast, dNorth) * (180 / Math.PI);
     if (angle < 0) angle += 360;
     const dirs = ["North", "North East", "East", "South East", "South", "South West", "West", "North West"];
     return dirs[Math.round(angle / 45) % 8];
@@ -160,10 +310,13 @@ function getDirection(from, to) {
 
 function extractCoords() {
     markers.forEach(m => {
-        const parts = m.label.match(/-?\d+(\.\d+)?/g);
-        if (parts && parts.length >= 2) { 
-            m.gx = parseFloat(parts[0]); 
-            m.gy = parseFloat(parts[1]); 
+        // Only try to extract gx/gy if not already present and parseable; fixes rare airdrop bug on reload
+        if ((typeof m.gx !== 'number' || isNaN(m.gx) || typeof m.gy !== 'number' || isNaN(m.gy)) && typeof m.label === "string") {
+            const parts = m.label.match(/-?\d+(\.\d+)?/g);
+            if (parts && parts.length >= 2) {
+                m.gx = parseFloat(parts[0]);
+                m.gy = parseFloat(parts[1]);
+            }
         }
     });
 }
@@ -189,24 +342,57 @@ function addAirdrop() {
     }
     if (!input) return;
     const p = input.match(/-?\d+(\.\d+)?/g);
-    if (p && p.length >= 2) {
-        const gx = parseFloat(p[0]), gy = parseFloat(p[1]);
-        const mPos = getPixelFromGame(gx, gy) || {x: mapImg.width/2, y: mapImg.height/2};
-        const airdropMark = { x: mPos.x, y: mPos.y, type: 'AIRDROP', label: `Airdrop [${gx}, ${gy}]`, gx, gy, timestamp: Date.now() };
-        markers.push(airdropMark);
-        saveAndRender();
-        const player = markers.find(m => m.type === 'PLAYER');
-        if (player) {
-            updateTacticalHUD(player, airdropMark);
-        } else {
-            pendingAirdropCalculation = true; 
-            isWaitingForLocationClick = true;
-            targetView.zoom = 1.2;
-            targetView.x = (canvas.width / 2) - (airdropMark.x * 1.2);
-            targetView.y = (canvas.height / 2) - (airdropMark.y * 1.2);
-            clampView();
-            document.getElementById('cal-info').innerText = "AIRDROP ADDED. TAP YOUR POSITION.";
+    if (!(p && p.length >= 2)) return;
+
+    const gx = parseFloat(p[0]), gy = parseFloat(p[1]);
+
+    // Remove all existing AIRDROP markers so there is only one
+    markers = markers.filter(m => m.type !== 'AIRDROP');
+
+    // Find or approximate pixel position
+    let mPos = getPixelFromGame(gx, gy);
+    if (
+        !mPos ||
+        !isFinite(mPos.x) ||
+        !isFinite(mPos.y)
+    ) {
+        let minDist = Infinity, found = null;
+        for (const m of MASTER_DATA) {
+            const d = Math.hypot((m.gx - gx), (m.gy - gy));
+            if (d < minDist) { minDist = d; found = m; }
         }
+        if (found && minDist < 5) {
+            mPos = {x: found.x, y: found.y};
+        }
+    }
+    if (!mPos || !isFinite(mPos.x) || !isFinite(mPos.y)) {
+        mPos = {x: mapImg.width/2, y: mapImg.height/2};
+    }
+
+    // Label must be in the correct format for reload/extractCoords!
+    const airdropLabel = `Airdrop [${gx}, ${gy}]`;
+    const airdropMark = {
+        x: mPos.x, y: mPos.y,
+        type: 'AIRDROP',
+        label: airdropLabel,
+        gx: gx,
+        gy: gy,
+        timestamp: Date.now()
+    };
+
+    markers.push(airdropMark);
+    saveAndRender();
+    extractCoords(); // Fix: very important after *any* marker push
+
+    const player = markers.find(m => m.type === 'PLAYER');
+    if (player) {
+        updateTacticalHUD(player, airdropMark);
+    } else {
+        pendingAirdropCalculation = true;
+        isWaitingForLocationClick = true;
+        // --- Smoothly zoom to the airdrop marker ---
+        zoomToAirdropSmooth(airdropMark);
+        document.getElementById('cal-info').innerText = "AIRDROP ADDED. TAP YOUR POSITION.";
     }
 }
 
@@ -219,7 +405,28 @@ function findNearest() {
 
 function showObjectiveMenu() {
     const statusBox = document.getElementById('cal-info');
-    statusBox.innerHTML = `<strong>SELECT OBJECTIVE:</strong><div class="obj-list"></div>`;
+    statusBox.innerHTML = `
+        <div style="
+            text-align: center;
+            font-weight: bold;
+            font-size: 1.12em;
+            margin-bottom: 10px;
+            letter-spacing: 1px;
+            color: #6AD44C;
+            border-bottom: 1.5px solid #333;
+            padding-bottom: 7px;
+        ">
+            SELECT OBJECTIVE
+        </div>
+        <div class="obj-list" style="
+            display: flex;
+            justify-content: center;
+            flex-wrap: wrap;
+            gap: 12px;
+            margin-top: 8px;
+        "></div>
+    `;
+
     const list = statusBox.querySelector('.obj-list');
     const types = [
         { id: 'GREEN', label: 'Green Crate' }, { id: 'BLUE', label: 'Blue Crate' },
@@ -229,9 +436,35 @@ function showObjectiveMenu() {
     types.forEach(t => {
         const btn = document.createElement('button');
         btn.className = 'obj-btn mobile-btn';
-        btn.style.color = colors[t.id];
         btn.innerText = t.label;
         btn.ontouchstart = btn.onclick = () => selectObjective(t.id);
+
+        btn.style.background = "#222";
+        btn.style.color = colors[t.id] || "#fff";
+        btn.style.border = `2px solid ${colors[t.id] || '#555'}`;
+        btn.style.borderRadius = "22px";
+        btn.style.fontWeight = "bold";
+        btn.style.fontSize = "1.02em";
+        btn.style.padding = "14px 20px";
+        btn.style.margin = "0 4px";
+        btn.style.boxShadow = "0 2px 7px rgba(0,0,0,0.28)";
+        btn.style.transition = "background 0.16s, color 0.16s, transform 0.09s";
+        btn.style.cursor = "pointer";
+        btn.style.minWidth = "108px";
+        btn.style.outline = "none";
+        btn.style.letterSpacing = "0.5px";
+
+        btn.onpointerdown = function() {
+            btn.style.background = colors[t.id];
+            btn.style.color = "#111";
+            btn.style.transform = "scale(0.97)";
+        };
+        btn.onpointerup = btn.onpointerleave = function() {
+            btn.style.background = "#222";
+            btn.style.color = colors[t.id];
+            btn.style.transform = "scale(1)";
+        };
+
         list.appendChild(btn);
     });
 }
@@ -240,7 +473,7 @@ function selectObjective(type) {
     searchTargetType = type;
     const playerMark = markers.find(m => m.type === 'PLAYER');
     if (!playerMark) return;
-    const candidates = markers.filter(mark => mark.type === searchTargetType && mark.gx !== undefined);
+    const candidates = markers.filter(mark => mark.type === searchTargetType && typeof mark.gx === "number" && typeof mark.gy === "number" && !isNaN(mark.gx) && !isNaN(mark.gy));
     if (candidates.length > 0) {
         let nearest = candidates[0];
         let minDist = Infinity;
@@ -255,8 +488,18 @@ function selectObjective(type) {
     }
 }
 
-function saveAndRender() { 
-    const truths = markers.filter(m => m.gx !== undefined && m.gy !== undefined);
+function saveAndRender() {
+    // Don't let duplicate AIRDROP markers persist
+    let foundAirdrop = false;
+    markers = markers.filter(m => {
+        if (m.type !== "AIRDROP") return true;
+        if (!foundAirdrop) { foundAirdrop = true; return true; }
+        // remove duplicates
+        return false;
+    });
+
+    const truths = markers.filter(m => typeof m.gx === 'number' && typeof m.gy === 'number' && !isNaN(m.gx) && !isNaN(m.gy));
+
     if (truths.length >= 2) {
         let sXp = 0, sYp = 0, sXg = 0, sYg = 0;
         truths.forEach(m => { sXp += m.x; sYp += m.y; sXg += m.gx; sYg += m.gy; });
@@ -270,11 +513,120 @@ function saveAndRender() {
         mapConfig.offsetX = aXg - (aXp * mapConfig.scaleX); mapConfig.offsetY = aYg - (aYp * mapConfig.scaleY);
         mapConfig.active = true;
     }
-    localStorage.setItem('savedMarkers', JSON.stringify(markers)); 
+    localStorage.setItem('savedMarkers', JSON.stringify(markers));
+}
+
+function showDeleteMarkerModal(marker, x, y) {
+    let existing = document.getElementById("delete-marker-modal");
+    if (existing) existing.remove();
+
+    let modal = document.createElement("div");
+    modal.id = "delete-marker-modal";
+    modal.style.position = "fixed";
+    modal.style.left = "0";
+    modal.style.top = "0";
+    modal.style.width = "100vw";
+    modal.style.height = "100vh";
+    modal.style.display = "flex";
+    modal.style.alignItems = "center";
+    modal.style.justifyContent = "center";
+    modal.style.background = "rgba(0,0,0,0.36)";
+    modal.style.zIndex = 3333;
+
+    let box = document.createElement("div");
+    box.style.background = "#181818";
+    box.style.color = "#fff";
+    box.style.padding = "28px 24px 24px 24px";
+    box.style.borderRadius = "14px";
+    box.style.boxShadow = "0px 4px 32px rgba(0,0,0,0.39)";
+    box.style.display = "flex";
+    box.style.flexDirection = "column";
+    box.style.alignItems = "center";
+    box.style.justifyContent = "center";
+    box.style.minWidth = "210px";
+    box.style.maxWidth = "80vw";
+
+    let title = document.createElement("div");
+    title.style.fontWeight = "bold";
+    title.style.fontSize = "1.18em";
+    title.style.marginBottom = "10px";
+    title.style.letterSpacing = "0.5px";
+    title.style.color = "#ffff00";
+    if(marker.type === "PLAYER") {
+        title.innerText = "Delete Your Position?";
+    } else if(marker.type === "AIRDROP") {
+        title.innerText = "Delete This Airdrop?";
+    } else {
+        title.innerText = "Delete Marker?";
+    }
+    box.appendChild(title);
+
+    let loc = document.createElement("div");
+    loc.innerText = marker.label || marker.type;
+    loc.style.fontSize = "1em";
+    loc.style.marginBottom = "17px";
+    loc.style.color = "#eee";
+    loc.style.textAlign = "center";
+    box.appendChild(loc);
+
+    let btnRow = document.createElement("div");
+    btnRow.style.display = "flex";
+    btnRow.style.justifyContent = "center";
+    btnRow.style.width = "100%";
+    btnRow.style.gap = "16px";
+
+    let delBtn = document.createElement("button");
+    delBtn.innerText = "Delete";
+    delBtn.style.background = "#e84542";
+    delBtn.style.color = "#fff";
+    delBtn.style.border = "none";
+    delBtn.style.padding = "9px 24px";
+    delBtn.style.fontWeight = "bold";
+    delBtn.style.borderRadius = "7px";
+    delBtn.style.fontSize = "1.0em";
+    delBtn.style.boxShadow = "0 2px 7px rgba(0,0,0,0.20)";
+    delBtn.style.cursor = "pointer";
+    delBtn.onclick = function() {
+        markers = markers.filter(mark => mark !== marker);
+        if (activeTarget === marker) activeTarget = null;
+        document.body.removeChild(modal);
+        saveAndRender();
+    };
+
+    let cancelBtn = document.createElement("button");
+    cancelBtn.innerText = "Cancel";
+    cancelBtn.style.background = "#222";
+    cancelBtn.style.color = "#bbb";
+    cancelBtn.style.border = "1.5px solid #477";
+    cancelBtn.style.padding = "9px 18px";
+    cancelBtn.style.fontWeight = "bold";
+    cancelBtn.style.borderRadius = "7px";
+    cancelBtn.style.fontSize = "1.0em";
+    cancelBtn.style.marginLeft = "7px";
+    cancelBtn.style.boxShadow = "0 1px 3px rgba(0,0,0,0.10)";
+    cancelBtn.style.cursor = "pointer";
+    cancelBtn.onclick = function() {
+        document.body.removeChild(modal);
+    };
+
+    btnRow.appendChild(delBtn);
+    btnRow.appendChild(cancelBtn);
+
+    box.appendChild(btnRow);
+
+    modal.appendChild(box);
+
+    modal.addEventListener("click", function(e){
+        if (e.target === modal) {
+            document.body.removeChild(modal);
+        }
+    });
+
+    document.body.appendChild(modal);
 }
 
 function render() {
-    const lerp = 0.03; 
+    const lerp = 0.03;
     if (!isDragging) {
         view.zoom += (targetView.zoom - view.zoom) * lerp;
         view.x += (targetView.x - view.x) * lerp;
@@ -286,7 +638,6 @@ function render() {
     ctx.scale(view.zoom, view.zoom);
     ctx.drawImage(mapImg, 0, 0);
 
-    // For mobile, show HUD near bottom
     let hudY = canvas.height - 48;
     if(window.innerWidth < 700) hudY = canvas.height - 52;
 
@@ -301,23 +652,23 @@ function render() {
             if (isCurrentlyPulsing) {
                 const pulse = (Math.sin(Date.now() / 150) + 1) / 2;
                 ctx.beginPath();
-                ctx.arc(m.x, m.y, (10 + pulse * 30) / view.zoom, 0, Math.PI * 2);
+                ctx.arc(m.x, m.y, (MARKER_PULSE_MIN_RADIUS + pulse * (MARKER_PULSE_MAX_RADIUS - MARKER_PULSE_MIN_RADIUS)) / view.zoom, 0, Math.PI * 2);
                 ctx.strokeStyle = colors[m.type];
-                ctx.lineWidth = 4 / view.zoom;
+                ctx.lineWidth = MARKER_PULSE_LINE_WIDTH / view.zoom;
                 ctx.stroke();
             }
             ctx.beginPath();
-            ctx.arc(m.x, m.y, 14 / view.zoom, 0, Math.PI * 2);
+            ctx.arc(m.x, m.y, MARKER_BASE_RADIUS / view.zoom, 0, Math.PI * 2);
             ctx.fillStyle = colors[m.type];
             ctx.fill();
             ctx.strokeStyle = isCurrentlyPulsing ? "white" : "rgba(255,255,255,0.8)";
-            ctx.lineWidth = 2 / view.zoom;
+            ctx.lineWidth = MARKER_LINE_WIDTH / view.zoom;
             ctx.stroke();
             if (showMarkers || m.type === 'PLAYER' || m.type === 'AIRDROP' || isCurrentlyPulsing) {
                 if (m === hovered || isCurrentlyPulsing || m.type === 'PLAYER') {
-                    ctx.font = `bold ${16 / view.zoom}px sans-serif`;
+                    ctx.font = `bold ${MARKER_FONT_SIZE / view.zoom}px sans-serif`;
                     ctx.fillStyle = "white";
-                    ctx.fillText(getCleanName(m.label), m.x + (15 / view.zoom), m.y - (15 / view.zoom));
+                    ctx.fillText(getCleanName(m.label), m.x + (MARKER_BASE_RADIUS + 4) / view.zoom, m.y - (MARKER_BASE_RADIUS + 4) / view.zoom);
                 }
             }
         }
@@ -325,12 +676,12 @@ function render() {
 
     ctx.setTransform(1, 0, 0, 1, 0, 0);
 
-    let hudText = isWaitingForLocationClick ? 
-        ((window.innerWidth <= 700 ? "Tap" : "Click") + " your position") : 
+    let hudText = isWaitingForLocationClick ?
+        ((window.innerWidth <= 700 ? "Tap" : "Click") + " your position") :
         `X: ${g.x}, Y: ${g.y}`;
     let hudColor = isWaitingForLocationClick ? "#00ffff" : "#6AD44C";
 
-    if (hovered && hovered.gx !== undefined) {
+    if (hovered && typeof hovered.gx === 'number' && typeof hovered.gy === 'number' && !isNaN(hovered.gx) && !isNaN(hovered.gy)) {
         hudText = `LOCKED: ${hovered.gx}, ${hovered.gy}`;
         hudColor = colors[hovered.type];
     }
@@ -348,7 +699,6 @@ function render() {
 /** INPUT HANDLERS (Touch + Mouse) **/
 
 function singlePointerCanvasXY(e, strict) {
-    // Accepts touch, pointer, or mouse
     let x = 0, y = 0;
     if (e.touches && e.touches.length > 0) {
         const r = canvas.getBoundingClientRect();
@@ -368,12 +718,10 @@ function singlePointerCanvasXY(e, strict) {
     return {x, y};
 }
 
-// Mouse/Touch click — add/calc marker/drag
 function handlePointerDown(sx, sy, origEvent) {
     const mapPos = screenToMap(sx, sy);
     const m = getMarkerAtPos(mapPos.x, mapPos.y);
 
-    // If waiting for "player position"
     if (isWaitingForLocationClick) {
         const myC = getGameCoords(mapPos.x, mapPos.y);
         const playerMark = { x: mapPos.x, y: mapPos.y, type: 'PLAYER', label: "Me", gx: myC.x, gy: myC.y, timestamp: Date.now() };
@@ -391,13 +739,10 @@ function handlePointerDown(sx, sy, origEvent) {
         return;
     }
 
-    // Long tap/press for mobile to delete 
     if (origEvent && origEvent.type === 'touchstart') {
         let longPressTimer = setTimeout(() => {
             if (m && (m.type === 'AIRDROP' || m.type === 'PLAYER')) {
-                markers = markers.filter(mark => mark !== m);
-                if (activeTarget === m) activeTarget = null;
-                saveAndRender();
+                showDeleteMarkerModal(m, sx, sy);
             }
         }, 600);
         const removeListener = ()=>{
@@ -411,14 +756,12 @@ function handlePointerDown(sx, sy, origEvent) {
         canvas.addEventListener('touchcancel',removeListener);
         origEvent.preventDefault();
     } else {
-        // On desktop, right click delete as before
         isDragging = true;
         lastMouseX = sx;
         lastMouseY = sy;
     }
 }
 
-// Mouse events (legacy/desktop)
 canvas.addEventListener('mousedown', (e) => {
     if (e.button === 0) {
         const pt = singlePointerCanvasXY(e, true);
@@ -461,7 +804,6 @@ window.addEventListener('mousemove', (e) => {
 
 window.addEventListener('mouseup', () => { isDragging = false; });
 
-// Mouse zoom
 canvas.addEventListener('wheel', (e) => {
     e.preventDefault();
     const scaleAmount = -e.deltaY * 0.001;
@@ -478,10 +820,6 @@ canvas.addEventListener('wheel', (e) => {
     view.y = targetView.y;
 }, { passive: false });
 
-// =======
-// TOUCH HANDLERS (mobile optimized):
-// =======
-
 canvas.addEventListener('touchstart', (e) => {
     if (e.touches.length === 1) {
         const pt = singlePointerCanvasXY(e, true);
@@ -492,7 +830,6 @@ canvas.addEventListener('touchstart', (e) => {
         lastMouseX = pt.x;
         lastMouseY = pt.y;
     }
-    // Multi-finger pinch start - for zoom gesture
     if (e.touches.length === 2) {
         isDragging = false;
         lastTouchDistance = Math.hypot(
@@ -507,7 +844,6 @@ canvas.addEventListener('touchstart', (e) => {
 }, {passive: false});
 
 canvas.addEventListener('touchmove', (e) => {
-    // Single drag = pan
     if (e.touches.length === 1 && isDragging) {
         const pt = {
             x: e.touches[0].clientX - canvas.getBoundingClientRect().left,
@@ -522,7 +858,6 @@ canvas.addEventListener('touchmove', (e) => {
         view.y = targetView.y;
         e.preventDefault();
     }
-    // Pinch zooming
     if (e.touches.length === 2) {
         let thisDist = Math.hypot(
             e.touches[0].clientX - e.touches[1].clientX,
@@ -536,7 +871,6 @@ canvas.addEventListener('touchmove', (e) => {
         let newZoom = targetView.zoom + scaleAmount;
         if (newZoom < MIN_ZOOM) newZoom = MIN_ZOOM;
         if (newZoom > MAX_ZOOM) newZoom = MAX_ZOOM;
-        // keep map under finger
         const m = screenToMap(centerPt.x, centerPt.y);
         targetView.zoom = newZoom;
         view.zoom = newZoom;
@@ -557,21 +891,71 @@ canvas.addEventListener('touchend', (e) => {
     lastCenter = null;
 });
 
-// ====
-// END TOUCH SUPPORT
-// ====
-
-// UI helper for mobile to show/hide markers
-function toggleVisibility() { 
-    showMarkers = !showMarkers; 
+function toggleVisibility() {
+    showMarkers = !showMarkers;
     if(window.innerWidth <= 700) {
         let btnEl = document.getElementById("hideShowBtn");
-        if (btnEl) 
+        if (btnEl)
             btnEl.innerText = showMarkers ? "Hide Markers" : "Show Markers";
     }
 }
 
+// --- NEW RESET LOGIC: Removes all PLAYER and AIRDROP markers but keeps master landmarks ---
+// Also resets and animates view to show the entire map
+window.resetAllMarkers = function() {
+    markers = markers.filter(m => m.type !== 'PLAYER' && m.type !== 'AIRDROP');
+
+    const mapWidth = canvas.width;
+    const mapHeight = canvas.height;
+    const imgWidth = mapImg.naturalWidth || mapImg.width;
+    const imgHeight = mapImg.naturalHeight || mapImg.height;
+
+    const PAD = 20;
+    const scaleX = (mapWidth - 2*PAD) / imgWidth;
+    const scaleY = (mapHeight - 2*PAD) / imgHeight;
+    const fitZoom = Math.min(scaleX, scaleY);
+
+    const targetZoom = Math.max(MIN_ZOOM, Math.min(fitZoom, MAX_ZOOM));
+    const targetX = (mapWidth/2) - (imgWidth/2) * targetZoom;
+    const targetY = (mapHeight/2) - (imgHeight/2) * targetZoom;
+
+    const startView = { x: view.x, y: view.y, zoom: view.zoom };
+    const endView = { x: targetX, y: targetY, zoom: targetZoom };
+    const startTime = performance.now();
+    const duration = 400;
+
+    function animateReset(now) {
+        let t = Math.min(1, (now - startTime) / duration);
+        t = t < 0.5
+            ? 2*t*t
+            : -1 + (4-2*t)*t;
+
+        view.x = startView.x + (endView.x - startView.x) * t;
+        view.y = startView.y + (endView.y - startView.y) * t;
+        view.zoom = startView.zoom + (endView.zoom - startView.zoom) * t;
+        targetView.x = view.x;
+        targetView.y = view.y;
+        targetView.zoom = view.zoom;
+        clampView();
+        render();
+        if (t < 1) {
+            requestAnimationFrame(animateReset);
+        } else {
+            view.x = endView.x;
+            view.y = endView.y;
+            view.zoom = endView.zoom;
+            targetView.x = endView.x;
+            targetView.y = endView.y;
+            targetView.zoom = endView.zoom;
+            render();
+        }
+    }
+
+    saveAndRender();
+    requestAnimationFrame(animateReset);
+};
+
 render();
 
-// --
-// Made by Phoxphor, mobile version rework for RMC TO GO
+// Made by Phoxphor
+// I dont know how to make mobile ports so this is scuffed as fuck
