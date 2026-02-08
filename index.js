@@ -81,21 +81,13 @@ function isMobileDevice() {
 
 // Set canvas size for desktop and mobile separately (subtracting sidebar width only for desktop)
 function resizeCanvas() {
-    // ensure devicePixelRatio support for both desktop/mobile for most precise interaction
-    const dpr = window.devicePixelRatio || 1;
     if (isMobileDevice()) {
-        canvas.width = window.innerWidth * dpr;
-        canvas.height = window.innerHeight * dpr;
-        canvas.style.width = window.innerWidth + "px";
-        canvas.style.height = window.innerHeight + "px";
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
     } else {
-        canvas.width = (window.innerWidth - 280) * dpr;
-        canvas.height = window.innerHeight * dpr;
-        canvas.style.width = (window.innerWidth - 280) + "px";
-        canvas.style.height = window.innerHeight + "px";
+        canvas.width = window.innerWidth - 280;
+        canvas.height = window.innerHeight;
     }
-    ctx.setTransform(1,0,0,1,0,0);
-    ctx.scale(dpr, dpr);
     clampView();
 }
 
@@ -132,18 +124,14 @@ function zoomToFit(p1, p2) {
     const centerY = (p1.y + p2.y) / 2;
     const dx = Math.abs(p1.x - p2.x);
     const dy = Math.abs(p1.y - p2.y);
-    let zoomX = (canvas.width/dpr() - padding) / (dx || 1);
-    let zoomY = (canvas.height/dpr() - padding) / (dy || 1);
+    let zoomX = (canvas.width - padding) / (dx || 1);
+    let zoomY = (canvas.height - padding) / (dy || 1);
     let newZoom = Math.min(zoomX, zoomY, 1.2);
     newZoom = Math.max(newZoom, MIN_ZOOM);
     targetView.zoom = newZoom;
-    targetView.x = ((canvas.width/dpr()) / 2) - (centerX * newZoom);
-    targetView.y = ((canvas.height/dpr()) / 2) - (centerY * newZoom);
+    targetView.x = (canvas.width / 2) - (centerX * newZoom);
+    targetView.y = (canvas.height / 2) - (centerY * newZoom);
     clampView();
-}
-
-function dpr() {
-    return window.devicePixelRatio || 1;
 }
 
 function updateTacticalHUD(player, target) {
@@ -206,8 +194,8 @@ function addAirdrop() {
             pendingAirdropCalculation = true;
             isWaitingForLocationClick = true;
             targetView.zoom = 1.2;
-            targetView.x = ((canvas.width/dpr()) / 2) - (airdropMark.x * 1.2);
-            targetView.y = ((canvas.height/dpr()) / 2) - (airdropMark.y * 1.2);
+            targetView.x = (canvas.width / 2) - (airdropMark.x * 1.2);
+            targetView.y = (canvas.height / 2) - (airdropMark.y * 1.2);
             clampView();
             document.getElementById('cal-info').innerText = "AIRDROP ADDED. CLICK YOUR POSITION.";
         }
@@ -278,12 +266,13 @@ function saveAndRender() {
 }
 
 function render() {
-    const lerp = 0.03;
-    if (!isDragging) {
-        view.zoom += (targetView.zoom - view.zoom) * lerp;
-        view.x += (targetView.x - view.x) * lerp;
-        view.y += (targetView.y - view.y) * lerp;
-    }
+    // If dragging or pinching, snap immediately. 
+    // Otherwise, move snappy (0.15)
+    const lerp = (isDragging || (window.touchDragging) || (window.pinchZooming)) ? 1.0 : 0.15; 
+
+    view.zoom += (targetView.zoom - view.zoom) * lerp;
+    view.x += (targetView.x - view.x) * lerp;
+    view.y += (targetView.y - view.y) * lerp;
 
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -327,6 +316,16 @@ function render() {
         }
     });
 
+    function getCanvasPoint(e) {
+        const r = canvas.getBoundingClientRect();
+        const clientX = e.touches ? (e.touches[0] || e.changedTouches[0]).clientX : e.clientX;
+        const clientY = e.touches ? (e.touches[0] || e.changedTouches[0]).clientY : e.clientY;
+        return {
+            x: (clientX - r.left) * (canvas.width / r.width),
+            y: (clientY - r.top) * (canvas.height / r.height)
+        };
+    }
+
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     let hudText = isWaitingForLocationClick ? "CLICK YOUR POSITION" : `X: ${g.x}, Y: ${g.y}`;
     let hudColor = isWaitingForLocationClick ? "#00ffff" : "#6AD44C";
@@ -348,21 +347,26 @@ function render() {
 /** INPUT HANDLERS **/
 
 // Unified pointer-to-map util for desktop (mouse) or mobile (touch)
-// FIXED: account for devicePixelRatio for perfect targeting on all screens
 function pointerToCanvas(e) {
     const r = canvas.getBoundingClientRect();
-    let x, y, dprVal = dpr();
+    let clientX, clientY;
+
     if (e.touches && e.touches.length) {
-        x = (e.touches[0].clientX - r.left) * (canvas.width / r.width / dprVal);
-        y = (e.touches[0].clientY - r.top) * (canvas.height / r.height / dprVal);
+        clientX = e.touches[0].clientX;
+        clientY = e.touches[0].clientY;
     } else if (e.changedTouches && e.changedTouches.length) {
-        x = (e.changedTouches[0].clientX - r.left) * (canvas.width / r.width / dprVal);
-        y = (e.changedTouches[0].clientY - r.top) * (canvas.height / r.height / dprVal);
+        clientX = e.changedTouches[0].clientX;
+        clientY = e.changedTouches[0].clientY;
     } else {
-        x = (e.clientX - r.left) * (canvas.width / r.width / dprVal);
-        y = (e.clientY - r.top) * (canvas.height / r.height / dprVal);
+        clientX = e.clientX;
+        clientY = e.clientY;
     }
-    return { x, y };
+
+    // This calculates the exact ratio if the CSS size differs from the internal size
+    return {
+        x: (clientX - r.left) * (canvas.width / r.width),
+        y: (clientY - r.top) * (canvas.height / r.height)
+    };
 }
 
 // --- Mouse handlers ---
@@ -413,9 +417,8 @@ canvas.addEventListener('contextmenu', (e) => e.preventDefault());
 
 window.addEventListener('mousemove', (e) => {
     const r = canvas.getBoundingClientRect();
-    let dprVal = dpr();
-    mouseX = (e.clientX - r.left) * (canvas.width / r.width / dprVal);
-    mouseY = (e.clientY - r.top) * (canvas.height / r.height / dprVal);
+    mouseX = e.clientX - r.left;
+    mouseY = e.clientY - r.top;
     if (isDragging) {
         targetView.x += e.clientX - lastMouseX;
         targetView.y += e.clientY - lastMouseY;
@@ -433,8 +436,7 @@ window.addEventListener('mouseup', () => { isDragging = false; });
 
 canvas.addEventListener('wheel', (e) => {
     e.preventDefault();
-    // Make pinch-zoom/wheel more responsive
-    const scaleAmount = -e.deltaY * 0.002; // faster
+    const scaleAmount = -e.deltaY * 0.001;
     let newZoom = targetView.zoom + scaleAmount;
     if (newZoom < MIN_ZOOM) newZoom = MIN_ZOOM;
     if (newZoom > MAX_ZOOM) newZoom = MAX_ZOOM;
@@ -500,68 +502,49 @@ canvas.addEventListener('touchstart', function (e) {
 
 canvas.addEventListener('touchmove', function(e) {
     e.preventDefault();
-    if (pinchZooming && e.touches.length === 2) {
-        const t0 = e.touches[0], t1 = e.touches[1];
-        const newDist = getDistance(t0, t1);
-        // Make pinch zooming more responsive by scaling speed slightly
-        let scale = Math.pow(newDist / pinchStartDist, 1.19); // slightly "faster"
-        let newZoom = pinchStartZoom * scale;
-        newZoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, newZoom));
-        // Keep the map centered on the fingers' midpoint (screen space)
-        const r = canvas.getBoundingClientRect();
-        let dprVal = dpr();
-        let midpointX = ((t0.clientX + t1.clientX) / 2 - r.left) * (canvas.width / r.width / dprVal);
-        let midpointY = ((t0.clientY + t1.clientY) / 2 - r.top) * (canvas.height / r.height / dprVal);
-        const mapMid = screenToMap(midpointX, midpointY);
+    const p = getCanvasPoint(e);
+    
+    // Updates HUD text position
+    mouseX = p.x; 
+    mouseY = p.y;
 
-        targetView.zoom = newZoom;
-        view.zoom = newZoom; // Responsiveness
-        targetView.x = midpointX - mapMid.x * targetView.zoom;
-        targetView.y = midpointY - mapMid.y * targetView.zoom;
-        clampView();
-        view.x = targetView.x;
-        view.y = targetView.y;
-    } else if (touchDragging && e.touches.length === 1) {
+    if (touchDragging && e.touches.length === 1) {
+        // Calculate how far finger moved
         const dx = e.touches[0].clientX - lastTouchX;
         const dy = e.touches[0].clientY - lastTouchY;
+
         targetView.x += dx;
         targetView.y += dy;
+        
+        // Force immediate sync for snappy feel
+        view.x = targetView.x; 
+        view.y = targetView.y;
+
         lastTouchX = e.touches[0].clientX;
         lastTouchY = e.touches[0].clientY;
         clampView();
-        view.x = targetView.x;
-        view.y = targetView.y;
-        // Update mouseX/mouseY for hud
-        const r = canvas.getBoundingClientRect();
-        let dprVal = dpr();
-        mouseX = (e.touches[0].clientX - r.left) * (canvas.width / r.width / dprVal);
-        mouseY = (e.touches[0].clientY - r.top) * (canvas.height / r.height / dprVal);
     }
 }, { passive: false });
 
 canvas.addEventListener('touchend', function(e) {
-    if (pinchZooming && e.touches.length < 2) {
-        pinchZooming = false;
-    }
-    if (touchDragging && e.touches.length === 0) {
-        touchDragging = false;
-    }
-    // Tap/click handling on touchend (for marker add/select/remove etc)
-    if (!(pinchZooming || touchDragging) && (e.changedTouches && e.changedTouches.length === 1)) {
-        const r = canvas.getBoundingClientRect();
-        let dprVal = dpr();
-        let tx = (e.changedTouches[0].clientX - r.left) * (canvas.width / r.width / dprVal);
-        let ty = (e.changedTouches[0].clientY - r.top) * (canvas.height / r.height / dprVal);
-        mouseX = tx;
-        mouseY = ty;
-        const mapPos = screenToMap(tx, ty);
-        const m = getMarkerAtPos(mapPos.x, mapPos.y);
+    touchDragging = false;
+    pinchZooming = false;
+
+    // Handle Taps for Markers
+    if (!isDragging && e.changedTouches.length === 1) {
+        const p = getCanvasPoint(e);
+        mouseX = p.x;
+        mouseY = p.y;
+        
         if (isWaitingForLocationClick) {
+            const mapPos = screenToMap(p.x, p.y);
             const myC = getGameCoords(mapPos.x, mapPos.y);
             const playerMark = { x: mapPos.x, y: mapPos.y, type: 'PLAYER', label: "Me", gx: myC.x, gy: myC.y, timestamp: Date.now() };
+            
             markers = markers.filter(mark => mark.type !== 'PLAYER');
             markers.push(playerMark);
             isWaitingForLocationClick = false;
+            
             if (pendingAirdropCalculation) {
                 const lastDrop = markers.filter(mark => mark.type === 'AIRDROP').pop();
                 if (lastDrop) updateTacticalHUD(playerMark, lastDrop);
@@ -570,26 +553,9 @@ canvas.addEventListener('touchend', function(e) {
                 showObjectiveMenu();
             }
             saveAndRender();
-            return;
-        } else if (m && (m.type === 'AIRDROP' || m.type === 'PLAYER')) {
-            // Long tap to remove marker (simulate right click)
-            // Let's require ~0.45s tap-and-hold for "remove":
-            let removeTimeout = setTimeout(() => {
-                markers = markers.filter(mark => mark !== m);
-                if (activeTarget === m) activeTarget = null;
-                saveAndRender();
-            }, 450);
-            canvas.addEventListener('touchmove', cancelRemoveMarker, { once: true });
-
-            function cancelRemoveMarker() {
-                clearTimeout(removeTimeout);
-            }
-        } else {
-            // Could add marker selection, but mobile users will use objective buttons.
         }
     }
 }, { passive: false });
-
 // Prevent scrolling when touching canvas (mobile web fix)
 canvas.addEventListener('touchstart', (e) => { e.preventDefault(); }, { passive: false });
 
