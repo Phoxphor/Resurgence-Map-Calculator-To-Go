@@ -143,176 +143,109 @@
 
 <script src="index.js"></script>
 <script>
-// --- Simple Touch & Pinch Zoom Handler ---
-// Only enable overrides on mobile/touch devices
+    // --- Simple Touch & Pinch Zoom Handler ---
+    // Only enable overrides on mobile/touch devices
 
-(function() {
-    const canvas = document.getElementById('mapCanvas');
-    if (!canvas) return;
+    (function() {
+        const canvas = document.getElementById('mapCanvas');
+        if (!canvas) return;
 
-    let isTouching = false;
-    let lastTouchDist = null;
-    let lastTouchMid = null;
-    let lastView = null;
-    let ongoing = false;
-    let singleTouchStart = null;
+        let lastDist = 0;
 
-    // Use view and targetView if defined in index.js
-    let view = window.view, targetView = window.targetView;
-    function setView(x, y, zoom) {
-        if (view) {
-            view.x = targetView.x = x;
-            view.y = targetView.y = y;
-            view.zoom = targetView.zoom = zoom;
-        }
-    }
-
-    function clamp(val, min, max) { return Math.max(min, Math.min(max, val)); }
-
-    // Utility: get current viewport size
-    function getSize() {
-        return {
-            width: canvas.clientWidth || canvas.width,
-            height: canvas.clientHeight || canvas.height
-        }
-    }
-
-    // Touch support for mobile
-    canvas.addEventListener('touchstart', function(e) {
-        if (e.touches.length === 2) {
-            isTouching = true;
-            ongoing = true;
-            lastTouchDist = Math.hypot(
-                e.touches[0].clientX - e.touches[1].clientX,
-                e.touches[0].clientY - e.touches[1].clientY
-            );
-            lastTouchMid = {
-                x: (e.touches[0].clientX + e.touches[1].clientX) / 2,
-                y: (e.touches[0].clientY + e.touches[1].clientY) / 2
-            };
-            lastView = view ? { x: view.x, y: view.y, zoom: view.zoom } : null;
-        } else if (e.touches.length === 1) {
-            isTouching = true;
-            singleTouchStart = {
-                x: e.touches[0].clientX,
-                y: e.touches[0].clientY,
-                vx: view ? view.x : 0,
-                vy: view ? view.y : 0
-            };
-        }
-    }, { passive: false });
-
-    canvas.addEventListener('touchmove', function(e) {
-        if (!isTouching || !view) return;
-        if (e.touches.length === 2 && lastTouchDist && lastTouchMid) {
-            // Pinch to zoom
-            e.preventDefault();
-            let currDist = Math.hypot(
-                e.touches[0].clientX - e.touches[1].clientX,
-                e.touches[0].clientY - e.touches[1].clientY
-            );
-            let mid = {
-                x: (e.touches[0].clientX + e.touches[1].clientX) / 2,
-                y: (e.touches[0].clientY + e.touches[1].clientY) / 2
-            };
-            let dx = mid.x - lastTouchMid.x;
-            let dy = mid.y - lastTouchMid.y;
-            let scale = currDist / lastTouchDist;
-
-            // Limit zoom
-            let minZoom = window.MIN_ZOOM || 0.2;
-            let maxZoom = window.MAX_ZOOM || 5.0;
-            let newZoom = clamp(lastView.zoom * scale, minZoom, maxZoom);
-
-            // Correction: Pan by midpoint delta (screen coords)
-            let sz = getSize();
-            // In canvas px, center is 0,0 in world at (view.x,view.y)
-            let worldPerPx = lastView.zoom;
-            let midWorldX = lastView.x + (mid.x - sz.width/2) * (1/lastView.zoom);
-            let midWorldY = lastView.y + (mid.y - sz.height/2) * (1/lastView.zoom);
-
-            // The new mid in world after zoom should stay put
-            let newVp = 1 / newZoom;
-            let nx = midWorldX - (mid.x - sz.width/2) * newVp;
-            let ny = midWorldY - (mid.y - sz.height/2) * newVp;
+        canvas.addEventListener('touchstart', (e) => {
+            e.preventDefault(); // Stops phone from scrolling page
             
-            setView(nx, ny, newZoom);
-
-        } else if (e.touches.length === 1 && singleTouchStart) {
-            // Drag to pan
-            e.preventDefault();
-            let dx = (e.touches[0].clientX - singleTouchStart.x) * (1 / view.zoom);
-            let dy = (e.touches[0].clientY - singleTouchStart.y) * (1 / view.zoom);
-            setView(singleTouchStart.vx - dx, singleTouchStart.vy - dy, view.zoom);
-        }
-    }, { passive: false });
-
-    canvas.addEventListener('touchend', function(e) {
-        if (e.touches.length === 0) {
-            isTouching = false;
-            lastTouchDist = null;
-            lastTouchMid = null;
-            lastView = null;
-            singleTouchStart = null;
-            ongoing = false;
-        }
-    });
-
-    // Optional: allow double-tap zoom
-    let lastTap = 0;
-    canvas.addEventListener('touchend', function(e) {
-        if (e.touches.length === 0 && e.changedTouches.length === 1) {
-            let now = Date.now();
-            if (now - lastTap < 350) {
-                // double tap: zoom in to the point
-                let rect = canvas.getBoundingClientRect();
-                let cx = e.changedTouches[0].clientX - rect.left;
-                let cy = e.changedTouches[0].clientY - rect.top;
-                let newZoom = clamp(view.zoom * 1.5, window.MIN_ZOOM || 0.2, window.MAX_ZOOM || 5.0);
-
-                // Focus zoom on tap
-                let sz = getSize();
-                let wx = view.x + (cx - sz.width/2) * (1/view.zoom);
-                let wy = view.y + (cy - sz.height/2) * (1/view.zoom);
-                let vp = 1 / newZoom;
-                let nx = wx - (cx - sz.width/2) * vp;
-                let ny = wy - (cy - sz.height/2) * vp;
-                setView(nx, ny, newZoom);
-                lastTap = 0;
-            } else {
-                lastTap = now;
+            if (e.touches.length === 2) {
+                const t1 = e.touches[0];
+                const t2 = e.touches[1];
+                lastDist = Math.hypot(t1.clientX - t2.clientX, t1.clientY - t2.clientY);
+            } else if (e.touches.length === 1) {
+                isDragging = true;
+                lastMouseX = e.touches[0].clientX;
+                lastMouseY = e.touches[0].clientY;
             }
-        }
-    });
+        }, { passive: false });
 
-    // Make canvas resize on mobile orientation change
-    window.addEventListener("orientationchange", function() {
-        setTimeout(function() {
-            if (typeof window.resizeCanvas === "function") window.resizeCanvas();
-        }, 510);
-    });
+        canvas.addEventListener('touchmove', (e) => {
+            e.preventDefault();
 
-    // Prevent body scroll when touching map
-    document.body.addEventListener('touchmove', function(e) {
-        if(e.target === canvas) e.preventDefault();
-    }, { passive: false });
+            if (e.touches.length === 2) {
+                // PINCH ZOOM
+                const t1 = e.touches[0];
+                const t2 = e.touches[1];
+                const dist = Math.hypot(t1.clientX - t2.clientX, t1.clientY - t2.clientY);
+                const midX = (t1.clientX + t2.clientX) / 2;
+                const midY = (t1.clientY + t2.clientY) / 2;
 
-    // Resize canvas to fit device (if not handled by index.js)
-    function resizeCanvas() {
-        let dpr = window.devicePixelRatio || 1;
-        let vp = document.getElementById('map-viewport');
-        if (vp && canvas) {
-            canvas.width = vp.offsetWidth * dpr;
-            canvas.height = vp.offsetHeight * dpr;
-            canvas.style.width = vp.offsetWidth + 'px';
-            canvas.style.height = vp.offsetHeight + 'px';
-            if (typeof window.renderMap === "function") window.renderMap();
-        }
-    }
-    window.resizeCanvas = resizeCanvas;
-    window.addEventListener('resize', resizeCanvas, { passive:true });
-    setTimeout(resizeCanvas, 200);
-})();
+                const r = canvas.getBoundingClientRect();
+                const focalX = midX - r.left;
+                const focalY = midY - r.top;
+
+                const mapPoint = screenToMap(focalX, focalY);
+                const delta = dist / lastDist;
+                
+                targetView.zoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, targetView.zoom * delta));
+                view.zoom = targetView.zoom; // Instant update
+
+                targetView.x = focalX - mapPoint.x * targetView.zoom;
+                targetView.y = focalY - mapPoint.y * targetView.zoom;
+                
+                lastDist = dist;
+                clampView();
+            } else if (e.touches.length === 1 && isDragging) {
+                // DRAG
+                const dx = e.touches[0].clientX - lastMouseX;
+                const dy = e.touches[0].clientY - lastMouseY;
+
+                targetView.x += dx;
+                targetView.y += dy;
+                view.x = targetView.x; // Instant update
+                view.y = targetView.y;
+
+                lastMouseX = e.touches[0].clientX;
+                lastMouseY = e.touches[0].clientY;
+
+                // Update HUD Coords
+                const r = canvas.getBoundingClientRect();
+                mouseX = e.touches[0].clientX - r.left;
+                mouseY = e.touches[0].clientY - r.top;
+                
+                clampView();
+            }
+        }, { passive: false });
+
+        canvas.addEventListener('touchend', (e) => {
+            if (e.touches.length === 0) {
+                isDragging = false;
+                // Handle Tap (Marker Placement)
+                if (e.changedTouches.length === 1) {
+                    const r = canvas.getBoundingClientRect();
+                    const tx = e.changedTouches[0].clientX - r.left;
+                    const ty = e.changedTouches[0].clientY - r.top;
+                    
+                    mouseX = tx;
+                    mouseY = ty;
+                    const mapPos = screenToMap(tx, ty);
+
+                    if (isWaitingForLocationClick) {
+                        const myC = getGameCoords(mapPos.x, mapPos.y);
+                        const playerMark = { x: mapPos.x, y: mapPos.y, type: 'PLAYER', label: "Me", gx: myC.x, gy: myC.y, timestamp: Date.now() };
+                        markers = markers.filter(mark => mark.type !== 'PLAYER');
+                        markers.push(playerMark);
+                        isWaitingForLocationClick = false;
+                        if (pendingAirdropCalculation) {
+                            const lastDrop = markers.filter(mark => mark.type === 'AIRDROP').pop();
+                            if (lastDrop) updateTacticalHUD(playerMark, lastDrop);
+                            pendingAirdropCalculation = false;
+                        } else {
+                            showObjectiveMenu();
+                        }
+                        saveAndRender();
+                    }
+                }
+            }
+        });
+    })();
 </script>
 </body>
 </html>
