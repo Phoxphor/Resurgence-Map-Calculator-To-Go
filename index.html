@@ -13,39 +13,61 @@
             background:#1a1a1a; color:#fff; font-family:sans-serif; overflow:hidden;
         }
         #topbar {
-            background:#232; color:#fff;
-            display:flex; flex-direction:column; align-items:center; justify-content:center;
-            gap:6px;
-            border-bottom:1px solid #333;
-            min-height:120px;
-            height:25vh;
+            background:none;
+            color:#fff;
+            display:flex; flex-direction:column; align-items:center; justify-content:flex-start;
+            gap:0px;
+            border:none;
+            min-height:0;
+            height:auto;
             width:100vw;
             box-sizing:border-box;
-            z-index:20;
+            z-index:30;
             position:relative;
-            padding:18px 8px 6px 8px;
+            padding:50px 0 30px 0;
+            pointer-events:none;
         }
         .mini-title {
-            font-size:2.8rem;
+            font-size:4.2rem;
             color:#6AD44C;
-            letter-spacing:2px;
-            font-weight:bold;
+            letter-spacing:3px;
+            font-weight:900;
             text-transform:uppercase;
             user-select:none;
             opacity:.98;
-            line-height:1.1;
-            margin-bottom:2px;
+            line-height:1;
+            margin-bottom:0.3em;
+            margin-top:0.25em;
+            text-shadow: 0 4px 24px #080, 0 1px 0px #222, 0 0px 18px #0007;
         }
         .sub-title {
-            font-size:1.35rem;
-            color:#aaa;
-            margin-top:0.5em;
-            line-height:1.2;
+            font-size:2.2rem;
+            color:#ccc;
+            text-shadow: 0 2px 8px #333;
+            font-weight:bold;
+            margin:0 0 0.6em 0;
+            line-height:1.1;
             text-align:center;
+            letter-spacing:2px;
         }
-        .button-group {
-            display:flex; flex-direction:row; gap:24px; width:auto; align-items:center; margin:18px 0 0 0;
-            justify-content:center;
+
+        /* ==== ACTION ICON OVERLAY ==== */
+        #action-overlay {
+            position:fixed;
+            left:32px;
+            bottom:32px;
+            z-index:50;
+            display:flex;
+            flex-direction:row;
+            gap:32px;
+            align-items:center;
+            background:rgba(24,32,28,0.60);
+            border-radius:20px;
+            box-shadow:0 8px 30px #0006, 0 2px 6px #6ad44c22;
+            padding:18px 20px 16px 22px;
+            border:2px solid #353;
+            pointer-events:auto;
+            transition:background 0.14s;
         }
         .ctrl-ico {
             width:72px; height:72px; min-width:72px; min-height:72px;
@@ -57,13 +79,17 @@
             font-size:2.4rem;
             margin:0 0;
             box-sizing:border-box;
-            box-shadow:0 4px 18px #0004;
+            box-shadow:0 4px 18px #0004,0 1.5px 0 #0909 inset;
         }
         .ctrl-ico:hover, .ctrl-ico:active { background:#363; box-shadow:0 6px 22px #161b; transform:scale(1.06);}
         .ctrl-ico[data-color="gold"] { background:#4e4010; color:#ffe700;}
+        .ctrl-ico[data-color="gold"]:hover { background:#806610; }
         .ctrl-ico[data-color="green"] { background:#2b4d24; color:#6AD44C;}
+        .ctrl-ico[data-color="green"]:hover { background:#377b2d;}
         .ctrl-ico[data-color="blue"] { background:#273651; color:#7bdfff;}
+        .ctrl-ico[data-color="blue"]:hover { background:#304d80;}
         .ctrl-ico[data-color="gray"] { background:#444; color:#fff;}
+        .ctrl-ico[data-color="gray"]:hover { background:#666!important;}
         #cal-info {
             font-size:1.1rem;
             padding:4px 10px;
@@ -80,47 +106,42 @@
             overflow:hidden;
             white-space:nowrap;
         }
+        /* Responsive tweaks */
         @media (max-width:1200px) {
-            #topbar { min-height:90px; height:18vh; padding:12px 6px 4px 6px;}
-            .mini-title { font-size:2.2rem; }
-            .ctrl-ico { width:58px; height:58px; min-width:58px; min-height:58px; font-size:1.8rem;}
-            .button-group { gap:16px; }
-            #cal-info { font-size:0.93rem; min-height:22px; max-width:58px;}
-            .sub-title { font-size:1.04rem; }
+            .mini-title { font-size:2.9rem;}
+            .sub-title{ font-size:1.25rem;}
+            #action-overlay { padding:10px 13px 9px 13px; left:16px; bottom:16px; gap:14px;}
+            .ctrl-ico { width:58px; height:58px; min-width:58px; min-height:58px; font-size:1.6rem;}
         }
         @media (max-width:800px) {
-            #topbar { min-height:70px; height:16vh; padding:6px 3px 2px 3px;}
-            .mini-title { font-size:1.58rem; }
-            .ctrl-ico { width:42px; height:42px; min-width:42px; min-height:42px; font-size:1.18rem;}
-            .button-group { gap:9px; }
-            #cal-info { font-size:0.7rem; min-height:14px; max-width:38px;}
-            .sub-title { font-size:0.82rem; }
+            .mini-title { font-size:1.68rem;}
+            .sub-title{ font-size:0.84rem;}
+            #action-overlay {padding:6px 7px 5px 8px; left:6px; bottom:6px; gap:6px;}
+            .ctrl-ico { width:42px; height:42px; min-width:42px; min-height:42px; font-size:1rem;}
         }
         @media (max-width:550px) {
-            #topbar { min-height:62px; height:14vh; padding:2px 1px 0 1px;}
-            .mini-title { font-size:1.15rem; }
-            .sub-title { font-size:0.61rem; }
-            .ctrl-ico { width:32px; height:32px; min-width:32px; min-height:32px; font-size:0.9rem;}
-            .button-group { gap:3px;}
-            #cal-info { font-size:0.5rem; min-height:10px; max-width:27px; padding:1px;}
+            .mini-title { font-size:1.02rem;}
+            .sub-title{ font-size:0.54rem;}
+            #action-overlay {padding:3px 4px 3px 4px; left:2px; bottom:2px; gap:2px;}
+            .ctrl-ico { width:28px; height:28px; min-width:28px; min-height:28px; font-size:0.7rem;}
         }
-        #map-viewport { flex-grow:1; overflow:hidden; background:#000; position:relative; touch-action:none; }
-        canvas { display:block; touch-action:none; }
+        #map-viewport { flex-grow:1; overflow:hidden; background:#000; position:relative; touch-action:none;}
+        canvas { display:block; touch-action:none;}
     </style>
 </head>
 <body>
 <div id="topbar">
-    <div class="mini-title">RMC To GO</div>
+    <div class="mini-title">RMC TO GO</div>
     <div class="sub-title">Made By Phoxphor</div>
-    <div class="button-group">
+</div>
+<div id="map-viewport">
+    <canvas id="mapCanvas"></canvas>
+    <div id="action-overlay">
         <button class="ctrl-ico" title="Add Airdrop" data-color="gold" onclick="addAirdrop()">&#x1F4E6;</button>
         <button class="ctrl-ico" title="Find Nearest" data-color="green" onclick="findNearest()">&#x1F50E;</button>
         <button class="ctrl-ico" title="Toggle Icons" data-color="gray" onclick="toggleVisibility()">&#x1F5FA;</button>
         <button class="ctrl-ico" title="Reset Map" data-color="blue" onclick="resetMap()">&#x21BB;</button>
     </div>
-</div>
-<div id="map-viewport">
-    <canvas id="mapCanvas"></canvas>
 </div>
 <script src="index.js"></script>
 <script>
