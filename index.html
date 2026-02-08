@@ -118,26 +118,35 @@
             width: 100vw;
             height: 100%;
             background: #000;
-            overflow: hidden;
+            overflow: auto;
             touch-action: none;
+            display: flex;
+            align-items: center;
+            justify-content: center;
         }
-        canvas#mapCanvas {
-            display: block;
-            /* Remove width/height 100vw/100% to prevent CSS distortion of canvas bitmap */
-            width: 100%;
-            height: 100%;
-            touch-action: none;
+        /* On mobile, center and make the map a fixed pixel size, allow scrolling */
+        @media (max-width: 749px) {
+            #map-viewport {
+                align-items: flex-start;
+                justify-content: flex-start;
+                overflow-x: auto;
+                overflow-y: auto;
+                width: 100vw;
+                height: 100%;
+            }
+            canvas#mapCanvas {
+                display: block;
+                max-width: none;
+                max-height: none;
+                width: 2048px !important;
+                height: 2048px !important;
+                /* Replace above with your actual map size if different */
+                box-shadow: 0 0 20px rgba(0,0,0,0.48);
+                margin: 0;
+                touch-action: none;
+            }
         }
-        /* Large touch targets (material style) */
-        .control-btn, .obj-btn {
-            min-width: 48px; min-height: 48px;
-        }
-        hr {
-            border: 0; border-top: 1.5px solid #444; margin: 6px 0 6px 0;
-            width: 100%;
-        }
-
-        /* Responsive for larger screens */
+        /* For desktop, canvas fills available space and is aspect-correct */
         @media (min-width: 750px) {
             #main-app-wrap { flex-direction: row; }
             #sidebar {
@@ -156,7 +165,23 @@
             #sidebar .left-group, #sidebar .mid-group { width: 100%; }
             #cal-info { margin-bottom: 0; margin-top: 16px; }
             #map-viewport { width: calc(100vw - 310px); height: 100vh; }
-            canvas#mapCanvas { width: 100%; height: 100%; }
+            canvas#mapCanvas {
+                width: 100%;
+                height: 100%;
+            }
+        }
+        canvas#mapCanvas {
+            display: block;
+            background: #000;
+            touch-action: none;
+        }
+        /* Large touch targets (material style) */
+        .control-btn, .obj-btn {
+            min-width: 48px; min-height: 48px;
+        }
+        hr {
+            border: 0; border-top: 1.5px solid #444; margin: 6px 0 6px 0;
+            width: 100%;
         }
 
         /* Hide scrollbar on sidebar & info panels on mobile for max map room */
@@ -233,45 +258,45 @@
         }
     }
 
-    // --- Added: Ensure canvas always matches map aspect ratio to prevent squashing ---
+    // --- Ensure canvas always matches map aspect ratio on desktop, 
+    // and stays at original pixel size on mobile with scroll if needed ---
     function resizeCanvasToWindow() {
         const canvas = document.getElementById('mapCanvas');
-        // You must set these based on your actual map image's pixel width/height
-        // For example, if your mapImg is 2048x2048 or 1920x1080, set accordingly
-        const MAP_WIDTH = 2048;   // <-- change to your map image's width in px
-        const MAP_HEIGHT = 2048;  // <-- and your map image's height in px
+        const MAP_WIDTH = 2048;   // Set to your map's real width in px
+        const MAP_HEIGHT = 2048;  // Set to your map's real height in px
 
-        let vw = document.getElementById('map-viewport').clientWidth;
-        let vh = document.getElementById('map-viewport').clientHeight;
-
-        // Calculate target aspect
-        let mapAspect = MAP_WIDTH / MAP_HEIGHT;
-        let viewAspect = vw / vh;
-        
-        let drawWidth, drawHeight;
-        if (viewAspect > mapAspect) {
-            // Window is too wide, fit by height
-            drawHeight = vh;
-            drawWidth = vh * mapAspect;
+        // On mobile: keep canvas always at original size, use scroll if needed
+        if (window.innerWidth < 750) {
+            // Physically fix canvas size
+            canvas.width = MAP_WIDTH;
+            canvas.height = MAP_HEIGHT;
+            canvas.style.width = MAP_WIDTH + 'px';
+            canvas.style.height = MAP_HEIGHT + 'px';
+            // viewport handles scrolling
         } else {
-            // Window is too tall, fit by width
-            drawWidth = vw;
-            drawHeight = vw / mapAspect;
+            // On desktop: scale to fit aspect
+            let vw = document.getElementById('map-viewport').clientWidth;
+            let vh = document.getElementById('map-viewport').clientHeight;
+
+            let mapAspect = MAP_WIDTH / MAP_HEIGHT;
+            let viewAspect = vw / vh;
+            let drawWidth, drawHeight;
+            if (viewAspect > mapAspect) {
+                drawHeight = vh;
+                drawWidth = vh * mapAspect;
+            } else {
+                drawWidth = vw;
+                drawHeight = vw / mapAspect;
+            }
+            canvas.width = Math.round(drawWidth);
+            canvas.height = Math.round(drawHeight);
+            canvas.style.width = "100%";
+            canvas.style.height = "100%";
         }
-
-        // Round to integer pixels to avoid blur on some displays
-        canvas.width = Math.round(drawWidth);
-        canvas.height = Math.round(drawHeight);
-
-        // For best canvas display: set style width/height to 100% of parent, 
-        // but actual drawing will be mapAspect correct.
-        canvas.style.width = "100%";
-        canvas.style.height = "100%";
     }
 
     window.addEventListener('resize', resizeCanvasToWindow);
     window.addEventListener('DOMContentLoaded', resizeCanvasToWindow);
-
 </script>
 </body>
 </html>
