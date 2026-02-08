@@ -2,447 +2,317 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <!-- Optimize mobile experience: enable user scaling, prevent accidental zoom -->
-    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5, user-scalable=yes">
-    <title>Resurgence Map Calculator To Go</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Resurgence Map Calculator</title>
     <style>
-        html, body {
-            margin: 0; padding: 0; height: 100%; width: 100%;
-            background: #1a1a1a; color: #fff; font-family: sans-serif;
-            touch-action: none;
-            -webkit-tap-highlight-color: transparent;
-            overflow: hidden;
+        body { 
+            display: flex; margin: 0; height: 100vh; width: 100vw; 
+            background: #1a1a1a; color: #ffffff; font-family: sans-serif; 
+            overflow: hidden; 
         }
-        body {
-            display: flex; flex-direction: column; min-height: 100vh; min-width: 100vw;
+        #sidebar { 
+            width: 280px; min-width: 280px; background: #252525; padding: 20px; 
+            border-right: 1px solid #444; display: flex; flex-direction: column; gap: 18px; z-index: 100;
+            align-items: center;
         }
-        #main-app-wrap {
-            display: flex; flex-direction: column; height: 100vh; width: 100vw;
+        h2 { 
+            margin: 0; font-size: 2.5rem; color: #6AD44C; text-transform: uppercase; letter-spacing: 2px; line-height: 1;
+            text-align: center;
+            width: 100%;
         }
-        #sidebar {
-            background: #252525; width: 100vw; min-width: 0;
-            padding: 10px 8px 8px 8px; display: flex;
-            flex-direction: column; align-items: stretch; gap: 0;
-            border-bottom: 1px solid #444; z-index: 200; box-sizing: border-box;
-            justify-content: flex-start;
-        }
-        #sidebar .left-group, #sidebar .mid-group {
-            display: flex; flex-direction: column; gap: 6px; align-items: flex-start;
-        }
-        #sidebar .right-group { display: none; }
-        #sidebar .left-group {
-            flex-basis: auto; min-width: 68px;
-            text-align:center; align-items:center;
-        }
-        #sidebar .mid-group { flex: 2; width: 100%; }
-        h2 {
-            margin: 0 0 2px 0; font-size: 2.1rem; color: #6AD44C;
-            text-transform: uppercase; letter-spacing: 2px; line-height: 1;
-        }
-        .author {
-            font-size: 0.8rem; color: #888; font-weight: bold; margin-bottom: 4px;
-        }
-        .control-btn {
-            padding: 16px 10px; font-size: 1rem; border-radius: 14px;
-            border: none; cursor: pointer; background: #444;
-            color: #fff; font-weight: bold; text-transform: uppercase;
-            margin-bottom: 2px; width: 100%;
-            transition: background 0.15s, transform 0.1s;
-            outline: none; touch-action: manipulation; box-sizing: border-box;
-        }
-        .control-btn[aria-pressed="true"], .control-btn:active {
-            transform: scale(0.97) !important;
-            filter: brightness(1.15) !important;
-        }
-        .control-btn:hover, .control-btn:focus-visible { background: #333; }
-
-        .airdrop-btn { background: #4e4010; color: #ffff00; }
-        .toggle-btn { background: #18304d; color: #6AD44C; }
-        .reset-btn { background: #882d2d; color: #fff; }
-
-        #cal-info {
-            font-size: 1rem; padding: 14px 10px; background: #000;
-            color: #6AD44C; border-radius: 14px; min-height: 80px;
-            border: 1px solid #6AD44C; display: flex; flex-direction: column;
-            align-items: center; justify-content: center; text-align: center;
-            overflow-y: auto; width: 100%; line-height: 1.5;
-            font-family: 'Courier New', Courier, monospace;
-            box-shadow: inset 0 0 11px rgba(106,212,76,0.18);
-            margin: 12px 0 0 0; box-sizing: border-box;
+        .author { font-size: 0.75rem; color: #888; margin-bottom: 10px; font-weight: bold; text-align: center; width: 100%; }
+        
+        .button-group {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 10px;
+            width: 100%;
         }
 
-        #map-viewport {
-            flex: 1 1 auto; position: relative; width: 100vw; height: 100%;
-            background: #000; overflow: hidden; touch-action: none;
-            display: flex; align-items: center; justify-content: center;
+        .control-btn { 
+            padding: 12px; cursor: pointer; background: #444; color: white; 
+            border: none; border-radius: 6px; font-weight: bold; width: 90%; max-width: 220px; text-transform: uppercase; 
+            margin: 0 auto;
+            display: block;
+            font-size: 1.09rem;
+        }
+        .control-btn:hover, .control-btn:active { background: #555; }
+
+        #cal-info { 
+            font-size: 0.85rem; padding: 15px; background: #000; color: #6AD44C; 
+            border-radius: 6px; min-height: 180px; border: 1px solid #6AD44C; 
+            display: flex; flex-direction: column; align-items: center; 
+            justify-content: center; text-align: center; overflow-y: auto;
+            line-height: 1.6; font-family: 'Courier New', Courier, monospace;
+            box-shadow: inset 0 0 10px rgba(106, 212, 76, 0.2);
+            width: 100%;
+            max-width: 250px;
+            margin: 0 auto;
         }
 
-        @media (max-width: 749px) {
-            #map-viewport {
-                align-items: flex-start; justify-content: flex-start;
-                overflow-x: auto; overflow-y: auto; width: 100vw; height: 100%; touch-action: none;
+        hr { border: 0; border-top: 1px solid #444; margin: 5px 0; width: 80%; }
+
+        /* --- MOBILE --- */
+        @media (max-width: 750px) {
+            body {
+                flex-direction: column;
+                height: 100vh;
+                width: 100vw;
             }
-            canvas#mapCanvas {
-                display: block; max-width: none; max-height: none;
-                width: 100vw !important;
-                height: calc(100vw * 1052 / 1603) !important;
-                min-width: 100vw;
-                min-height: calc(100vw * 1052 / 1603);
-                aspect-ratio: 1603/1052; box-shadow: 0 0 20px rgba(0,0,0,0.48);
-                margin: 0; touch-action: none;
-            }
-        }
-        @media (min-width: 750px) {
-            #main-app-wrap { flex-direction: row; }
             #sidebar {
-                flex-direction: column; align-items: stretch;
-                width: 310px; min-width: 272px; max-width: 348px;
-                min-height: 100vh; border-bottom: none; border-right: 1px solid #444;
-                gap: 10px; padding-bottom: 0;
+                width: 100vw;
+                min-width: unset;
+                border-right: none;
+                border-bottom: 1px solid #444;
+                flex-direction: column;
+                align-items: center;
+                justify-content: flex-start;
+                flex-wrap: nowrap;
+                padding: 18px 6px 14px 6px;
+                font-size: 1em;
+                gap: 14px;
+                overflow-x: auto;
+                box-sizing: border-box;
             }
-            #sidebar .left-group, #sidebar .mid-group {
-                flex-direction: column; align-items: flex-start; gap: 7px;
+            #sidebar h2 {
+                font-size: 2rem;
             }
-            #sidebar .left-group, #sidebar .mid-group { width: 100%; }
-            #cal-info { margin-bottom: 0; margin-top: 16px; }
-            #map-viewport { width: calc(100vw - 310px); height: 100vh; }
-            canvas#mapCanvas {
-                width: 100%; height: 100%; aspect-ratio: 1603/1052;
+            #cal-info {
+                min-height: unset;
+                padding: 11px 6px;
+                font-size: 0.97em;
+                max-width: 295px;
+                margin: 0 auto 0 auto;
+                flex: none;
+                width: 100%;
             }
+            .button-group {
+                width: 100%;
+                gap: 12px;
+                margin-bottom: 0;
+            }
+            .control-btn {
+                padding: 11px 7px;
+                font-size: 1.07em;
+                min-width: 120px;
+                max-width: 310px;
+                width: 92vw;
+                margin-bottom: 0;
+                margin-top: 0;
+                border-radius: 7px;
+            }
+            hr {
+                width: 90%;
+                margin: 6px auto;
+            }
+            .author { display: none; }
         }
-        canvas#mapCanvas {
-            display: block; background: #000; touch-action: none;
-            user-select: none;
+        #map-viewport { flex-grow: 1; overflow: hidden; background: #000; position: relative; touch-action: none; }
+        canvas { display: block; touch-action: none; }
+        /* Objective Menu Styles */
+        .obj-list { width: 100%; display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
+        .obj-btn {
+            background: none; border: none; padding: 4px; cursor: pointer;
+            text-decoration: underline; text-transform: uppercase; font-weight: bold;
+            font-family: 'Courier New', Courier, monospace; font-size: 0.9rem;
+            transition: transform 0.1s;
         }
-        .control-btn, .obj-btn { min-width: 48px; min-height: 48px; }
-        hr {
-            border: 0; border-top: 1.5px solid #444; margin: 6px 0 6px 0; width: 100%;
-        }
-
-        #sidebar, #cal-info { scrollbar-width: none; }
-        #sidebar::-webkit-scrollbar, #cal-info::-webkit-scrollbar { display: none; }
-
-        .control-btn:active, .obj-btn:active { filter: brightness(1.4); }
+        .obj-btn:hover { transform: scale(1.1); filter: brightness(1.3); }
     </style>
 </head>
 <body>
-<div id="main-app-wrap">
-    <div id="sidebar">
-        <div class="left-group">
-            <h2 style="margin:0 auto;">RMC TO GO</h2>
-            <div class="author" style="margin:0 auto;">Made By Phoxphor</div>
-        </div>
-        <div class="mid-group">
-            <button class="control-btn airdrop-btn" onclick="addAirdrop()" tabindex="1">Add Airdrop</button>
-            <button class="control-btn toggle-btn" id="hideShowBtn" onclick="toggleVisibility()" tabindex="2">Hide Markers</button>
-            <button class="control-btn reset-btn" onclick="resetAll()" tabindex="3">Reset</button>
-            <div id="cal-info">WAITING FOR INPUT...</div>
-        </div>
+
+<div id="sidebar">
+    <h2>RMC</h2>
+    <div class="author">Made By Phoxphor</div>
+
+    <div class="button-group">
+        <button class="control-btn" style="background: #4e4010; color: #ffff00;" onclick="addAirdrop()">Add Airdrop</button>
+        <button class="control-btn" style="background: #2b4d24; color: #6AD44C;" onclick="findNearest()">Find Nearest</button>
+        <button class="control-btn" onclick="toggleVisibility()">Toggle Icons</button>
     </div>
-    <div id="map-viewport">
-        <canvas id="mapCanvas" tabindex="0"></canvas>
-    </div>
+    <hr>
+    <div id="cal-info">WAITING FOR INPUT...</div>
+    <hr>
+</div>
+
+<div id="map-viewport">
+    <canvas id="mapCanvas"></canvas>
 </div>
 
 <script src="index.js"></script>
 <script>
-    // Improved: Helper for sidebar auto-hide on mobile (unchanged)
-    function mobileAutoSidebar() {
-        if (window.innerWidth > 700) return;
-        const sidebar = document.getElementById('sidebar');
-        let isHidden = false;
-        let startY = 0, dist = 0;
-        sidebar.addEventListener('touchstart', e => {
-            if (e.touches.length !== 1) return;
-            startY = e.touches[0].clientY;
-        });
-        sidebar.addEventListener('touchmove', e => {
-            if (e.touches.length !== 1) return;
-            dist = e.touches[0].clientY - startY;
-            if (dist < -40 && !isHidden) {
-                sidebar.style.transform = 'translateY(-100%)';
-                sidebar.style.transition = 'transform 0.20s';
-                isHidden = true;
-            }
-            if (dist > 40 && isHidden) {
-                sidebar.style.transform = 'translateY(0)';
-                isHidden = false;
-            }
-        });
-        sidebar.addEventListener('touchend', () => {
-            setTimeout(() => {
-                sidebar.style.transition = '';
-            }, 220);
-        });
-    }
-    window.addEventListener('DOMContentLoaded', mobileAutoSidebar);
+// --- Simple Touch & Pinch Zoom Handler ---
+// Only enable overrides on mobile/touch devices
 
-    // Add resetAll function placeholder; should be implemented in index.js
-    function resetAll() {
-        if (typeof window.resetAllMarkers === "function") {
-            window.resetAllMarkers();
-        } else if (typeof resetMarkers === "function") {
-            resetMarkers();
-        } else {
-            location.reload();
+(function() {
+    const canvas = document.getElementById('mapCanvas');
+    if (!canvas) return;
+
+    let isTouching = false;
+    let lastTouchDist = null;
+    let lastTouchMid = null;
+    let lastView = null;
+    let ongoing = false;
+    let singleTouchStart = null;
+
+    // Use view and targetView if defined in index.js
+    let view = window.view, targetView = window.targetView;
+    function setView(x, y, zoom) {
+        if (view) {
+            view.x = targetView.x = x;
+            view.y = targetView.y = y;
+            view.zoom = targetView.zoom = zoom;
         }
     }
 
-    // --- Make canvas responsive and always SHARP on mobile (devicePixelRatio) ---
-    // Also expose correct pixel->map transform for accurate clicks/taps
-    function resizeCanvasToWindow() {
-        const canvas = document.getElementById('mapCanvas');
-        const MAP_WIDTH = 1603;
-        const MAP_HEIGHT = 1052;
-        let displayW, displayH, scaleX, scaleY;
-        const dpr = window.devicePixelRatio || 1;
+    function clamp(val, min, max) { return Math.max(min, Math.min(max, val)); }
 
-        if (window.innerWidth < 750) {
-            displayW = window.innerWidth;
-            displayH = Math.round(displayW * MAP_HEIGHT / MAP_WIDTH);
+    // Utility: get current viewport size
+    function getSize() {
+        return {
+            width: canvas.clientWidth || canvas.width,
+            height: canvas.clientHeight || canvas.height
+        }
+    }
 
-            canvas.style.width = displayW + 'px';
-            canvas.style.height = displayH + 'px';
+    // Touch support for mobile
+    canvas.addEventListener('touchstart', function(e) {
+        if (e.touches.length === 2) {
+            isTouching = true;
+            ongoing = true;
+            lastTouchDist = Math.hypot(
+                e.touches[0].clientX - e.touches[1].clientX,
+                e.touches[0].clientY - e.touches[1].clientY
+            );
+            lastTouchMid = {
+                x: (e.touches[0].clientX + e.touches[1].clientX) / 2,
+                y: (e.touches[0].clientY + e.touches[1].clientY) / 2
+            };
+            lastView = view ? { x: view.x, y: view.y, zoom: view.zoom } : null;
+        } else if (e.touches.length === 1) {
+            isTouching = true;
+            singleTouchStart = {
+                x: e.touches[0].clientX,
+                y: e.touches[0].clientY,
+                vx: view ? view.x : 0,
+                vy: view ? view.y : 0
+            };
+        }
+    }, { passive: false });
 
-            canvas.width = Math.round(displayW * dpr);
-            canvas.height = Math.round(displayH * dpr);
+    canvas.addEventListener('touchmove', function(e) {
+        if (!isTouching || !view) return;
+        if (e.touches.length === 2 && lastTouchDist && lastTouchMid) {
+            // Pinch to zoom
+            e.preventDefault();
+            let currDist = Math.hypot(
+                e.touches[0].clientX - e.touches[1].clientX,
+                e.touches[0].clientY - e.touches[1].clientY
+            );
+            let mid = {
+                x: (e.touches[0].clientX + e.touches[1].clientX) / 2,
+                y: (e.touches[0].clientY + e.touches[1].clientY) / 2
+            };
+            let dx = mid.x - lastTouchMid.x;
+            let dy = mid.y - lastTouchMid.y;
+            let scale = currDist / lastTouchDist;
 
-            scaleX = canvas.width / MAP_WIDTH;
-            scaleY = canvas.height / MAP_HEIGHT;
+            // Limit zoom
+            let minZoom = window.MIN_ZOOM || 0.2;
+            let maxZoom = window.MAX_ZOOM || 5.0;
+            let newZoom = clamp(lastView.zoom * scale, minZoom, maxZoom);
 
-            if (canvas.getContext) {
-                const ctx = canvas.getContext('2d');
-                ctx.setTransform(1, 0, 0, 1, 0, 0); // reset
-                ctx.scale(scaleX, scaleY);
-            }
-        } else {
-            let vw = document.getElementById('map-viewport').clientWidth;
-            let vh = document.getElementById('map-viewport').clientHeight;
-            let mapAspect = MAP_WIDTH / MAP_HEIGHT;
-            let viewAspect = vw / vh;
-            let drawWidth, drawHeight;
-            if (viewAspect > mapAspect) {
-                drawHeight = vh;
-                drawWidth = vh * mapAspect;
+            // Correction: Pan by midpoint delta (screen coords)
+            let sz = getSize();
+            // In canvas px, center is 0,0 in world at (view.x,view.y)
+            let worldPerPx = lastView.zoom;
+            let midWorldX = lastView.x + (mid.x - sz.width/2) * (1/lastView.zoom);
+            let midWorldY = lastView.y + (mid.y - sz.height/2) * (1/lastView.zoom);
+
+            // The new mid in world after zoom should stay put
+            let newVp = 1 / newZoom;
+            let nx = midWorldX - (mid.x - sz.width/2) * newVp;
+            let ny = midWorldY - (mid.y - sz.height/2) * newVp;
+            
+            setView(nx, ny, newZoom);
+
+        } else if (e.touches.length === 1 && singleTouchStart) {
+            // Drag to pan
+            e.preventDefault();
+            let dx = (e.touches[0].clientX - singleTouchStart.x) * (1 / view.zoom);
+            let dy = (e.touches[0].clientY - singleTouchStart.y) * (1 / view.zoom);
+            setView(singleTouchStart.vx - dx, singleTouchStart.vy - dy, view.zoom);
+        }
+    }, { passive: false });
+
+    canvas.addEventListener('touchend', function(e) {
+        if (e.touches.length === 0) {
+            isTouching = false;
+            lastTouchDist = null;
+            lastTouchMid = null;
+            lastView = null;
+            singleTouchStart = null;
+            ongoing = false;
+        }
+    });
+
+    // Optional: allow double-tap zoom
+    let lastTap = 0;
+    canvas.addEventListener('touchend', function(e) {
+        if (e.touches.length === 0 && e.changedTouches.length === 1) {
+            let now = Date.now();
+            if (now - lastTap < 350) {
+                // double tap: zoom in to the point
+                let rect = canvas.getBoundingClientRect();
+                let cx = e.changedTouches[0].clientX - rect.left;
+                let cy = e.changedTouches[0].clientY - rect.top;
+                let newZoom = clamp(view.zoom * 1.5, window.MIN_ZOOM || 0.2, window.MAX_ZOOM || 5.0);
+
+                // Focus zoom on tap
+                let sz = getSize();
+                let wx = view.x + (cx - sz.width/2) * (1/view.zoom);
+                let wy = view.y + (cy - sz.height/2) * (1/view.zoom);
+                let vp = 1 / newZoom;
+                let nx = wx - (cx - sz.width/2) * vp;
+                let ny = wy - (cy - sz.height/2) * vp;
+                setView(nx, ny, newZoom);
+                lastTap = 0;
             } else {
-                drawWidth = vw;
-                drawHeight = vw / mapAspect;
-            }
-            canvas.width = Math.round(drawWidth * dpr);
-            canvas.height = Math.round(drawHeight * dpr);
-            canvas.style.width = '100%';
-            canvas.style.height = '100%';
-
-            scaleX = canvas.width / MAP_WIDTH;
-            scaleY = canvas.height / MAP_HEIGHT;
-
-            if (canvas.getContext) {
-                const ctx = canvas.getContext('2d');
-                ctx.setTransform(1, 0, 0, 1, 0, 0);
-                ctx.scale(scaleX, scaleY);
+                lastTap = now;
             }
         }
+    });
 
-        // Save for click/tap transform
-        window._mapScaleX = scaleX;
-        window._mapScaleY = scaleY;
+    // Make canvas resize on mobile orientation change
+    window.addEventListener("orientationchange", function() {
+        setTimeout(function() {
+            if (typeof window.resizeCanvas === "function") window.resizeCanvas();
+        }, 510);
+    });
+
+    // Prevent body scroll when touching map
+    document.body.addEventListener('touchmove', function(e) {
+        if(e.target === canvas) e.preventDefault();
+    }, { passive: false });
+
+    // Resize canvas to fit device (if not handled by index.js)
+    function resizeCanvas() {
+        let dpr = window.devicePixelRatio || 1;
+        let vp = document.getElementById('map-viewport');
+        if (vp && canvas) {
+            canvas.width = vp.offsetWidth * dpr;
+            canvas.height = vp.offsetHeight * dpr;
+            canvas.style.width = vp.offsetWidth + 'px';
+            canvas.style.height = vp.offsetHeight + 'px';
+            if (typeof window.renderMap === "function") window.renderMap();
+        }
     }
-
-    window.addEventListener('resize', resizeCanvasToWindow);
-    window.addEventListener('DOMContentLoaded', resizeCanvasToWindow);
-
-    /* ---- IMPROVED touch & mouse support: accurate pan/zoom and click for mobile ---- */
-    (function enableTouchMapControls() {
-        const canvas = document.getElementById('mapCanvas');
-        const MAP_WIDTH = 1603;
-        const MAP_HEIGHT = 1052;
-
-        // Pan/Zoom view parameters
-        let view = {offsetX: 0, offsetY: 0, scale: 1};
-
-        // Pan values
-        let isDragging = false, lastX = 0, lastY = 0, startOffsetX = 0, startOffsetY = 0;
-        // Pinch
-        let initialPinchDistance = null, lastScale = 1, pinchCenterStart = null;
-        const minScale = 1, maxScale = 4;
-        let redrawPending = false;
-
-        function redraw() {
-            // Debounce unnecessary redraws for smoother touch
-            if (!redrawPending) {
-                redrawPending = true;
-                setTimeout(() => {
-                    redrawPending = false;
-                    if (window.setMapView) window.setMapView({...view});
-                }, 0);
-            }
-        }
-
-        // Helper: Get map coordinates given pointer/touch event
-        function clientToMap(e, pointer = 0) {
-            const rect = canvas.getBoundingClientRect();
-            // Average scale: assume uniform scaling (because aspect-force)
-            let sX = window._mapScaleX || 1, sY = window._mapScaleY || 1;
-            // e could be MouseEvent, Touch, or even synthetic
-            let clientX, clientY;
-            if (typeof pointer === 'number' && e.touches && e.touches[pointer]) {
-                clientX = e.touches[pointer].clientX;
-                clientY = e.touches[pointer].clientY;
-            } else if (e.clientX !== undefined) {
-                clientX = e.clientX;
-                clientY = e.clientY;
-            } else {
-                clientX = 0; clientY = 0;
-            }
-            // Correct for devicePixelRatio/scaling, transform to map coords
-            // (client - rect.left) / scale then apply offset/scale
-            let x = ((clientX - rect.left) / sX - view.offsetX) / view.scale;
-            let y = ((clientY - rect.top) / sY - view.offsetY) / view.scale;
-            return {x, y};
-        }
-
-        // --- Touch handlers ---
-        canvas.addEventListener('touchstart', function(e) {
-            if (e.touches.length === 1) {
-                isDragging = true;
-                lastX = e.touches[0].clientX;
-                lastY = e.touches[0].clientY;
-                startOffsetX = view.offsetX;
-                startOffsetY = view.offsetY;
-            } else if (e.touches.length === 2) {
-                isDragging = false;
-                const t0 = e.touches[0], t1 = e.touches[1];
-                const dx = t0.clientX - t1.clientX, dy = t0.clientY - t1.clientY;
-                initialPinchDistance = Math.sqrt(dx*dx + dy*dy);
-                // Find center point relative to canvas, for "fix" zoom
-                const centerX = (t0.clientX + t1.clientX) / 2;
-                const centerY = (t0.clientY + t1.clientY) / 2;
-                pinchCenterStart = clientToMap(
-                    {touches: [{clientX:centerX,clientY:centerY}]}, 0
-                );
-                lastScale = view.scale;
-            }
-            e.preventDefault();
-        }, {passive: false});
-        canvas.addEventListener('touchmove', function(e) {
-            if (isDragging && e.touches.length === 1) {
-                let dx = e.touches[0].clientX - lastX;
-                let dy = e.touches[0].clientY - lastY;
-                let sX = window._mapScaleX || 1, sY = window._mapScaleY || 1;
-                view.offsetX = startOffsetX + dx / (sX * view.scale);
-                view.offsetY = startOffsetY + dy / (sY * view.scale);
-                redraw();
-            } else if (e.touches.length === 2 && initialPinchDistance !== null) {
-                const t0 = e.touches[0], t1 = e.touches[1];
-                const dx = t0.clientX - t1.clientX, dy = t0.clientY - t1.clientY;
-                const newDist = Math.sqrt(dx*dx + dy*dy);
-                let newScale = Math.max(minScale, Math.min(maxScale, lastScale * newDist / initialPinchDistance));
-                if (newScale !== view.scale && pinchCenterStart) {
-                    // Zoom relative to pinch center
-                    // Compute new offset to keep pinch center stable in map
-                    const rect = canvas.getBoundingClientRect();
-                    const centerX = (t0.clientX + t1.clientX)/2, centerY = (t0.clientY + t1.clientY)/2;
-                    let sX = window._mapScaleX || 1, sY = window._mapScaleY || 1;
-                    const mapPointBefore = {
-                        x: ((centerX-rect.left)/sX - view.offsetX) / view.scale,
-                        y: ((centerY-rect.top)/sY - view.offsetY) / view.scale
-                    };
-                    view.offsetX += (1 - newScale / view.scale) * mapPointBefore.x;
-                    view.offsetY += (1 - newScale / view.scale) * mapPointBefore.y;
-                    view.scale = newScale;
-                }
-                redraw();
-            }
-            e.preventDefault();
-        }, {passive: false});
-        canvas.addEventListener('touchend', function(e) {
-            isDragging = false;
-            initialPinchDistance = null;
-            pinchCenterStart = null;
-        });
-        // Double-tap to reset
-        let tapTimeout = null;
-        canvas.addEventListener('touchend', function(e) {
-            if (e.touches.length === 0) {
-                if (tapTimeout !== null) {
-                    // Double tap detected
-                    view.offsetX = 0; view.offsetY = 0; view.scale = 1; redraw();
-                    clearTimeout(tapTimeout); tapTimeout = null;
-                } else {
-                    tapTimeout = setTimeout(() => tapTimeout = null, 300);
-                }
-            }
-        });
-
-        // Allow tap/click to work with proper transform
-        // Rewrite: forward corrected coordinates
-        function handleMapClick(evt) {
-            let pos = clientToMap(evt);
-            // Forward to index.js or other part of app
-            if (window.onMapClick) {
-                window.onMapClick(pos.x, pos.y, evt);
-            }
-        }
-        // Mouse click (desktop)
-        canvas.addEventListener('click', handleMapClick);
-        // Tap (mobile)
-        canvas.addEventListener('touchend', function(evt) {
-            // Only on tap, not on drag/pinch
-            if (evt.touches.length === 0 && evt.changedTouches && evt.changedTouches.length === 1 && !isDragging && !initialPinchDistance) {
-                let fakeEvt = {
-                    clientX: evt.changedTouches[0].clientX,
-                    clientY: evt.changedTouches[0].clientY
-                };
-                handleMapClick(fakeEvt);
-            }
-        });
-
-        // --- Mouse (desktop) Pan/Zoom ---
-        let mouseDown = false, mouseLastX = 0, mouseLastY = 0, mouseStartOffsetX = 0, mouseStartOffsetY = 0;
-        canvas.addEventListener('mousedown', function(e) {
-            mouseDown = true;
-            mouseLastX = e.clientX; mouseLastY = e.clientY;
-            mouseStartOffsetX = view.offsetX; mouseStartOffsetY = view.offsetY;
-        });
-        window.addEventListener('mousemove', function(e) {
-            if (mouseDown) {
-                let sX = window._mapScaleX || 1;
-                let sY = window._mapScaleY || 1;
-                view.offsetX = mouseStartOffsetX + (e.clientX - mouseLastX) / (sX * view.scale);
-                view.offsetY = mouseStartOffsetY + (e.clientY - mouseLastY) / (sY * view.scale);
-                redraw();
-            }
-        });
-        window.addEventListener('mouseup', function(e) {
-            mouseDown = false;
-        });
-        // Mouse wheel zoom, zoom at pointer
-        canvas.addEventListener('wheel', function(e) {
-            // On Mac/desktop Chrome CTRL+trackpad triggers pinch, so handle it regardless of ctrlKey
-            let delta = -e.deltaY/100;
-            let pointer = {clientX: e.clientX, clientY: e.clientY};
-            let scaleFactor = 1 + delta * 0.17;
-            let newScale = Math.max(minScale, Math.min(maxScale, view.scale * scaleFactor));
-            if (newScale !== view.scale) {
-                // Zoom around mouse pointer
-                let pos = clientToMap(pointer);
-                view.offsetX += ((1 - newScale / view.scale) * pos.x);
-                view.offsetY += ((1 - newScale / view.scale) * pos.y);
-                view.scale = newScale;
-                redraw();
-            }
-            e.preventDefault();
-        }, {passive: false});
-
-        // Expose for drawing
-        window.getMapTransform = () => ({...view});
-        // Expose for accurate placing/logic
-        window.clientToMap = clientToMap;
-        // For debug/test: quick zoom reset (desktop double click)
-        canvas.addEventListener('dblclick', function(e){
-            view.offsetX = 0; view.offsetY = 0; view.scale = 1; redraw();
-        });
-    })();
+    window.resizeCanvas = resizeCanvas;
+    window.addEventListener('resize', resizeCanvas, { passive:true });
+    setTimeout(resizeCanvas, 200);
+})();
 </script>
 </body>
 </html>
