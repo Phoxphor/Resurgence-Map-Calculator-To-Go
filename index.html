@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Resurgence Map Calculator To Go</title>
+    <style>
+        html, body {
+            margin: 0; padding: 0; height: 100%; width: 100%;
+            background: #1a1a1a; color: #fff; font-family: sans-serif;
+            touch-action: pan-x pan-y; -webkit-tap-highlight-color: transparent;
+            overflow: hidden;
+        }
+        body {
+            display: flex; flex-direction: column; min-height: 100vh; min-width: 100vw;
+        }
+        #main-app-wrap {
+            display: flex;
+            flex-direction: column;
+            height: 100vh; width: 100vw;
+        }
+        #sidebar {
+            background: #252525;
+            width: 100vw;
+            min-width: 0;
+            padding: 10px 8px 8px 8px;
+            display: flex;
+            flex-direction: row;
+            align-items: flex-start;
+            gap: 8px;
+            border-bottom: 1px solid #444;
+            z-index: 200;
+            box-sizing: border-box;
+            justify-content: space-between;
+        }
+        #sidebar .left-group,
+        #sidebar .mid-group,
+        #sidebar .right-group {
+            display: flex; flex-direction: column; gap: 6px; align-items: flex-start;
+        }
+        #sidebar .left-group {
+            flex-basis: 22vw;
+            min-width: 68px;
+        }
+        #sidebar .mid-group {
+            flex: 2;
+        }
+        #sidebar .right-group {
+            flex-direction: column;
+            gap: 6px;
+            align-items: flex-end;
+            flex-basis: 30vw;
+            min-width: 84px;
+        }
+        h2 {
+            margin: 0 0 2px 0; font-size: 2.1rem; color: #6AD44C; text-transform: uppercase; letter-spacing: 2px;
+            line-height: 1;
+        }
+        .author {
+            font-size: 0.8rem; color: #888; font-weight: bold; margin-bottom: 4px;
+        }
+        .control-btn {
+            padding: 16px 10px;
+            font-size: 1rem;
+            border-radius: 14px;
+            border: none;
+            cursor: pointer;
+            background: #444;
+            color: #fff;
+            font-weight: bold;
+            text-transform: uppercase;
+            margin-bottom: 2px;
+            width: 100%;
+            transition: background 0.15s, transform 0.1s;
+            outline: none;
+            touch-action: manipulation;
+            box-sizing: border-box;
+        }
+        .control-btn[aria-pressed="true"], .control-btn:active {
+            transform: scale(0.97) !important;
+            filter: brightness(1.15) !important;
+        }
+        .control-btn:hover, .control-btn:focus-visible {
+            background: #333;
+        }
+
+        .airdrop-btn {
+            background: #4e4010; color: #ffff00;
+        }
+        .nearest-btn {
+            background: #2b4d24; color: #6AD44C;
+        }
+        .toggle-btn { background: #18304d; color: #6AD44C; }
+
+        #cal-info {
+            font-size: 1rem;
+            padding: 10px 8px;
+            background: #000;
+            color: #6AD44C;
+            border-radius: 11px;
+            min-height: 80px;
+            border: 1px solid #6AD44C;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            overflow-y: auto;
+            margin: 0 0 0 0;
+            width: 100%;
+            line-height: 1.5;
+            font-family: 'Courier New', Courier, monospace;
+            box-shadow: inset 0 0 11px rgba(106, 212, 76, 0.18);
+        }
+
+        #map-viewport {
+            flex: 1 1 auto;
+            position: relative;
+            width: 100vw;
+            height: 100%;
+            background: #000;
+            overflow: hidden;
+            touch-action: none;
+        }
+        canvas#mapCanvas {
+            display: block;
+            width: 100vw;
+            height: 100%;
+            touch-action: none;
+        }
+        /* Large touch targets (material style) */
+        .control-btn, .obj-btn {
+            min-width: 48px; min-height: 48px;
+        }
+        hr {
+            border: 0; border-top: 1.5px solid #444; margin: 6px 0 6px 0;
+            width: 100%;
+        }
+
+        /* Responsive for larger screens */
+        @media (min-width: 750px) {
+            #main-app-wrap { flex-direction: row; }
+            #sidebar {
+                flex-direction: column;
+                align-items: stretch;
+                width: 310px; min-width: 272px; max-width: 348px;
+                min-height: 100vh; border-bottom: none; border-right: 1px solid #444;
+                gap: 10px;
+            }
+            #sidebar .left-group,
+            #sidebar .mid-group,
+            #sidebar .right-group {
+                flex-direction: column; align-items: flex-start;
+                gap: 7px;
+            }
+            #sidebar .left-group, #sidebar .mid-group, #sidebar .right-group { width: 100%; }
+            #cal-info { margin-bottom: 0; }
+            #map-viewport { width: calc(100vw - 310px); height: 100vh; }
+            canvas#mapCanvas { width: 100%; height: 100%; }
+        }
+
+        /* Hide scrollbar on sidebar & info panels on mobile for max map room */
+        #sidebar, #cal-info { scrollbar-width: none; }
+        #sidebar::-webkit-scrollbar, #cal-info::-webkit-scrollbar { display: none; }
+
+        /* Add a bit more touch feedback */
+        .control-btn:active, .obj-btn:active { filter: brightness(1.4); }
+
+    </style>
+</head>
+<body>
+<div id="main-app-wrap">
+    <div id="sidebar">
+        <div class="left-group">
+            <h2>RMC TO GO</h2>
+            <div class="author">Made By Phoxphor</div>
+        </div>
+        <div class="mid-group" style="flex:2">
+            <button class="control-btn airdrop-btn" onclick="addAirdrop()" tabindex="1">Add Airdrop</button>
+            <button class="control-btn nearest-btn" onclick="findNearest()" tabindex="2">Find Nearest</button>
+            <button class="control-btn toggle-btn" id="hideShowBtn" onclick="toggleVisibility()" tabindex="3">Hide Markers</button>
+        </div>
+        <div class="right-group" style="flex:1">
+            <div id="cal-info">WAITING FOR INPUT...</div>
+        </div>
+    </div>
+
+    <div id="map-viewport">
+        <canvas id="mapCanvas" tabindex="0"></canvas>
+    </div>
+</div>
+
+<script src="index.js"></script>
+<script>
+    // Small JS for mobile viewport delight: scroll sidebar away on tap for max map
+    function mobileAutoSidebar() {
+        if (window.innerWidth > 700) return;
+        const sidebar = document.getElementById('sidebar');
+        let isHidden = false;
+        let startY = 0, dist = 0;
+        sidebar.addEventListener('touchstart', e => {
+            if (e.touches.length !== 1) return;
+            startY = e.touches[0].clientY;
+        });
+        sidebar.addEventListener('touchmove', e => {
+            if (e.touches.length !== 1) return;
+            dist = e.touches[0].clientY - startY;
+            if (dist < -40 && !isHidden) {
+                sidebar.style.transform = 'translateY(-100%)';
+                sidebar.style.transition = 'transform 0.20s';
+                isHidden = true;
+            }
+            if (dist > 40 && isHidden) {
+                sidebar.style.transform = 'translateY(0)';
+                isHidden = false;
+            }
+        });
+        sidebar.addEventListener('touchend', () => {
+            setTimeout(() => {
+                sidebar.style.transition = '';
+            }, 220);
+        });
+    }
+    window.addEventListener('DOMContentLoaded', mobileAutoSidebar);
+</script>
+</body>
+</html>
