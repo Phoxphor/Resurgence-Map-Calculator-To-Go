@@ -1,11 +1,9 @@
-// RMC TO GO - MOBILE REWORK
-
 const canvas = document.getElementById('mapCanvas');
 const ctx = canvas.getContext('2d');
 const mapImg = new Image();
 mapImg.src = 'Map.jpg';
 
-/** CONFIG **/
+/** CONFIG BULL SHIT **/
 const PLAYER_SPEED = 48;
 const HUMAN_ERROR_BUFFER = 1.5;
 const MIN_ZOOM = 0.2;
@@ -20,8 +18,10 @@ if (markers.length === 0) markers = MASTER_DATA;
 
 let showMarkers = true;
 let mouseX = 0, mouseY = 0;
+
 let isWaitingForLocationClick = false;
 let pendingAirdropCalculation = false;
+
 let searchTargetType = null;
 let activeTarget = null;
 let pulseEndTime = 0;
@@ -31,23 +31,12 @@ let view = { x: 0, y: 0, zoom: 0.8 };
 let targetView = { x: 0, y: 0, zoom: 0.8 };
 let isDragging = false;
 let lastMouseX = 0, lastMouseY = 0;
-let lastTouchDistance = null;
-let lastCenter = null;
 
 const colors = {
     GREEN: '#6AD44C', BLUE: '#4C92D4', RED: '#EB564F',
     SAFE: '#F3E57A', BRIEF: '#714E2E', EXTRACT: '#AD30D3',
     LOCATION: '#ffffff', AIRDROP: '#ffff00', PLAYER: '#00ffff'
 };
-
-// --- Marker Size Configuration ---
-const MARKER_BASE_RADIUS = 8;
-const MARKER_PULSE_MIN_RADIUS = 6;
-const MARKER_PULSE_MAX_RADIUS = 20;
-const MARKER_FONT_SIZE = 11;
-const MARKER_HIT_RADIUS = 18;
-const MARKER_LINE_WIDTH = 1.5;
-const MARKER_PULSE_LINE_WIDTH = 2.7;
 
 /** HELPER FUNCTIONS **/
 function formatTime(totalSeconds) {
@@ -65,118 +54,97 @@ function getCleanName(label) {
 function clampView() {
     const zoomedWidth = mapImg.width * targetView.zoom;
     const zoomedHeight = mapImg.height * targetView.zoom;
-    let buffer = -100;
 
-    if(window.innerWidth < 700) buffer = 0;
+    // How many pixels MUST remain visible on screen at all times
+    const buffer = -100;
 
+    // Horizontal Limits
+    // Max Right: Map's left edge can't go further right than (Canvas Width - Buffer)
+    // Max Left: Map's right edge can't go further left than (Buffer)
     const minX = buffer - zoomedWidth;
     const maxX = canvas.width - buffer;
+
     if (targetView.x < minX) targetView.x = minX;
     if (targetView.x > maxX) targetView.x = maxX;
+
+    // Vertical Limits
     const minY = buffer - zoomedHeight;
     const maxY = canvas.height - buffer;
+
     if (targetView.y < minY) targetView.y = minY;
     if (targetView.y > maxY) targetView.y = maxY;
 }
 
-function adjustCanvasSizeForMobile() {
-    if(window.innerWidth < 700 || window.innerHeight < 700) {
+function isMobileDevice() {
+    return /Mobi|Android|iPhone|iPad|iPod|Windows Phone/i.test(navigator.userAgent);
+}
+
+// Set canvas size for desktop and mobile separately (subtracting sidebar width only for desktop)
+function resizeCanvas() {
+    if (isMobileDevice()) {
         canvas.width = window.innerWidth;
-        canvas.height = window.innerHeight - 70;
-        document.body.style.overflow = "hidden";
-        document.getElementById('cal-info').style.fontSize = '1.1em';
-        document.getElementById('cal-info').style.padding = '8px';
+        canvas.height = window.innerHeight;
     } else {
         canvas.width = window.innerWidth - 280;
         canvas.height = window.innerHeight;
-        document.getElementById('cal-info').style.fontSize = '';
-        document.body.style.overflow = '';
     }
+    clampView();
 }
+
+// Set up onload and resize to work for both
 mapImg.onload = () => {
-    adjustCanvasSizeForMobile();
+    resizeCanvas();
     extractCoords();
     saveAndRender();
 };
 
-window.onresize = adjustCanvasSizeForMobile;
+window.onresize = () => {
+    resizeCanvas();
+};
 
 function screenToMap(sx, sy) {
     return { x: (sx - view.x) / view.zoom, y: (sy - view.y) / view.zoom };
 }
 
 function getMarkerAtPos(mapX, mapY) {
-    const baseRadius = MARKER_HIT_RADIUS;
-    const hitRadius = Math.min(baseRadius / view.zoom, 40);
-    const candidates = markers.filter(m => Math.sqrt((mapX - m.x)**2 + (mapY - m.y)**2) < hitRadius);
+    const baseRadius = 30;
+    const hitRadius = Math.min(baseRadius / view.zoom, 60);
+
+    const candidates = markers.filter(m => Math.sqrt((mapX - m.x) ** 2 + (mapY - m.y) ** 2) < hitRadius);
     if (candidates.length === 0) return null;
+
     const priority = candidates.find(m => m.type === 'PLAYER' || m.type === 'AIRDROP');
     if (priority) return priority;
     return candidates[0];
 }
 
-// Auto-zoom functions removed
-
-function animateZoomToFit(p1, p2, duration = 600, customZoom=null) {
-    // REMOVED: This function is intentionally empty due to removal of auto zoom.
-}
-
-function zoomToAirdropSmooth(airdropMarker) {
-    // REMOVED: This function is intentionally empty due to removal of auto zoom.
-}
-
 function zoomToFit(p1, p2) {
-    // REMOVED: This function is intentionally empty due to removal of auto zoom.
+    const padding = 200;
+    const centerX = (p1.x + p2.x) / 2;
+    const centerY = (p1.y + p2.y) / 2;
+    const dx = Math.abs(p1.x - p2.x);
+    const dy = Math.abs(p1.y - p2.y);
+    let zoomX = (canvas.width - padding) / (dx || 1);
+    let zoomY = (canvas.height - padding) / (dy || 1);
+    let newZoom = Math.min(zoomX, zoomY, 1.2);
+    newZoom = Math.max(newZoom, MIN_ZOOM);
+    targetView.zoom = newZoom;
+    targetView.x = (canvas.width / 2) - (centerX * newZoom);
+    targetView.y = (canvas.height / 2) - (centerY * newZoom);
+    clampView();
 }
 
 function updateTacticalHUD(player, target) {
     const statusBox = document.getElementById('cal-info');
     activeTarget = target;
     pulseEndTime = Date.now() + 15000;
-
-    // AIRDROP LOGIC FIX: If the airdrop or player is missing correct gx/gy (due to calibration, user input, or bad mapping), warn properly
-    if (
-        target &&
-        typeof target.gx !== 'number' ||
-        typeof target.gy !== 'number' ||
-        isNaN(target.gx) ||
-        isNaN(target.gy)
-    ) {
-        statusBox.innerHTML = `
-            <div style="text-align:center;color:#EB564F;padding:10px"><strong>ERROR:</strong><br>Invalid target coordinates for Airdrop or Objective. Please calibrate or input correct map co-ordinates.</div>
-        `;
-        return;
-    }
-
-    if (
-        player &&
-        typeof player.gx !== 'number' ||
-        typeof player.gy !== 'number' ||
-        isNaN(player.gx) ||
-        isNaN(player.gy)
-    ) {
-        statusBox.innerHTML = `
-            <div style="text-align:center;color:#EB564F;padding:10px"><strong>ERROR:</strong><br>Your position is invalid. Tap on the map to place yourself or calibrate.</div>
-        `;
-        return;
-    }
-
-    const distToTarget = Math.sqrt((player.gx - target.gx)**2 + (player.gy - target.gy)**2);
+    const distToTarget = Math.sqrt((player.gx - target.gx) ** 2 + (player.gy - target.gy) ** 2);
     const direction = getDirection(player, target);
     const rawSeconds = Math.round((distToTarget / PLAYER_SPEED) * HUMAN_ERROR_BUFFER);
     const readableTime = formatTime(rawSeconds);
-    statusBox.innerHTML = `
-        <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;">
-            <div style="font-size:0.95em;color:#6AD44C;text-align:center;">
-                <strong>OBJECTIVE:</strong><br>
-                ${getCleanName(target.label)}<br>
-                <strong>BEARING:</strong> ${direction.toUpperCase()}<br>
-                <strong>RANGE:</strong> ${Math.round(distToTarget)}M<br>
-                <strong>ETA:</strong> ${readableTime}
-            </div>
-        </div>
-    `;
-    // Auto-zoom removed: no longer zoom on new target or player/target overlap
+
+    statusBox.innerHTML = `<strong>OBJECTIVE:</strong><br>${getCleanName(target.label)}<br><strong>BEARING:</strong> ${direction.toUpperCase()}<br><strong>RANGE:</strong> ${Math.round(distToTarget)}M<br><strong>ETA:</strong> ${readableTime}`;
+    zoomToFit(player, target);
 }
 
 function getDirection(from, to) {
@@ -190,13 +158,10 @@ function getDirection(from, to) {
 
 function extractCoords() {
     markers.forEach(m => {
-        // Only try to extract gx/gy if not already present and parseable; fixes rare airdrop bug on reload
-        if ((typeof m.gx !== 'number' || isNaN(m.gx) || typeof m.gy !== 'number' || isNaN(m.gy)) && typeof m.label === "string") {
-            const parts = m.label.match(/-?\d+(\.\d+)?/g);
-            if (parts && parts.length >= 2) {
-                m.gx = parseFloat(parts[0]);
-                m.gy = parseFloat(parts[1]);
-            }
+        const parts = m.label.match(/-?\d+(\.\d+)?/g);
+        if (parts && parts.length >= 2) {
+            m.gx = parseFloat(parts[0]);
+            m.gy = parseFloat(parts[1]);
         }
     });
 }
@@ -213,94 +178,40 @@ function getPixelFromGame(gx, gy) {
 
 /** CORE ACTIONS **/
 function addAirdrop() {
-    // On mobile: custom modal, else normal prompt
-    let input;
-    if (window.innerWidth <= 700) {
-        input = window.prompt("Enter Airdrop Coords (X, Y):");
-    } else {
-        input = prompt("Enter Airdrop Coords (X, Y):");
-    }
+    const input = prompt("Enter Airdrop Coords (X, Y):");
     if (!input) return;
     const p = input.match(/-?\d+(\.\d+)?/g);
-    if (!(p && p.length >= 2)) return;
-
-    const gx = parseFloat(p[0]), gy = parseFloat(p[1]);
-
-    // Remove all existing AIRDROP markers so there is only one
-    markers = markers.filter(m => m.type !== 'AIRDROP');
-
-    // Find or approximate pixel position
-    let mPos = getPixelFromGame(gx, gy);
-    if (
-        !mPos ||
-        !isFinite(mPos.x) ||
-        !isFinite(mPos.y)
-    ) {
-        let minDist = Infinity, found = null;
-        for (const m of MASTER_DATA) {
-            const d = Math.hypot((m.gx - gx), (m.gy - gy));
-            if (d < minDist) { minDist = d; found = m; }
+    if (p && p.length >= 2) {
+        const gx = parseFloat(p[0]), gy = parseFloat(p[1]);
+        const mPos = getPixelFromGame(gx, gy) || { x: mapImg.width / 2, y: mapImg.height / 2 };
+        const airdropMark = { x: mPos.x, y: mPos.y, type: 'AIRDROP', label: `Airdrop [${gx}, ${gy}]`, gx, gy, timestamp: Date.now() };
+        markers.push(airdropMark);
+        saveAndRender();
+        const player = markers.find(m => m.type === 'PLAYER');
+        if (player) {
+            updateTacticalHUD(player, airdropMark);
+        } else {
+            pendingAirdropCalculation = true;
+            isWaitingForLocationClick = true;
+            targetView.zoom = 1.2;
+            targetView.x = (canvas.width / 2) - (airdropMark.x * 1.2);
+            targetView.y = (canvas.height / 2) - (airdropMark.y * 1.2);
+            clampView();
+            document.getElementById('cal-info').innerText = "AIRDROP ADDED. CLICK YOUR POSITION.";
         }
-        if (found && minDist < 5) {
-            mPos = {x: found.x, y: found.y};
-        }
-    }
-    if (!mPos || !isFinite(mPos.x) || !isFinite(mPos.y)) {
-        mPos = {x: mapImg.width/2, y: mapImg.height/2};
-    }
-
-    // Label must be in the correct format for reload/extractCoords!
-    const airdropLabel = `Airdrop [${gx}, ${gy}]`;
-    const airdropMark = {
-        x: mPos.x, y: mPos.y,
-        type: 'AIRDROP',
-        label: airdropLabel,
-        gx: gx,
-        gy: gy,
-        timestamp: Date.now()
-    };
-
-    markers.push(airdropMark);
-    saveAndRender();
-    extractCoords(); // Fix: very important after *any* marker push
-
-    const player = markers.find(m => m.type === 'PLAYER');
-    if (player) {
-        updateTacticalHUD(player, airdropMark);
-    } else {
-        pendingAirdropCalculation = true;
-        isWaitingForLocationClick = true;
-        // Auto-zoom removed: no longer zoom to the airdrop marker
-        document.getElementById('cal-info').innerText = "AIRDROP ADDED.";
     }
 }
 
-// findNearest removed as per instruction
+function findNearest() {
+    pendingAirdropCalculation = false;
+    isWaitingForLocationClick = true;
+    activeTarget = null;
+    document.getElementById('cal-info').innerText = "CLICK YOUR POSITION...";
+}
 
 function showObjectiveMenu() {
     const statusBox = document.getElementById('cal-info');
-    statusBox.innerHTML = `
-        <div style="
-            text-align: center;
-            font-weight: bold;
-            font-size: 1.12em;
-            margin-bottom: 10px;
-            letter-spacing: 1px;
-            color: #6AD44C;
-            border-bottom: 1.5px solid #333;
-            padding-bottom: 7px;
-        ">
-            SELECT OBJECTIVE
-        </div>
-        <div class="obj-list" style="
-            display: flex;
-            justify-content: center;
-            flex-wrap: wrap;
-            gap: 12px;
-            margin-top: 8px;
-        "></div>
-    `;
-
+    statusBox.innerHTML = `<strong>SELECT OBJECTIVE:</strong><div class="obj-list"></div>`;
     const list = statusBox.querySelector('.obj-list');
     const types = [
         { id: 'GREEN', label: 'Green Crate' }, { id: 'BLUE', label: 'Blue Crate' },
@@ -309,36 +220,10 @@ function showObjectiveMenu() {
     ];
     types.forEach(t => {
         const btn = document.createElement('button');
-        btn.className = 'obj-btn mobile-btn';
+        btn.className = 'obj-btn';
+        btn.style.color = colors[t.id];
         btn.innerText = t.label;
-        btn.ontouchstart = btn.onclick = () => selectObjective(t.id);
-
-        btn.style.background = "#222";
-        btn.style.color = colors[t.id] || "#fff";
-        btn.style.border = `2px solid ${colors[t.id] || '#555'}`;
-        btn.style.borderRadius = "22px";
-        btn.style.fontWeight = "bold";
-        btn.style.fontSize = "1.02em";
-        btn.style.padding = "14px 20px";
-        btn.style.margin = "0 4px";
-        btn.style.boxShadow = "0 2px 7px rgba(0,0,0,0.28)";
-        btn.style.transition = "background 0.16s, color 0.16s, transform 0.09s";
-        btn.style.cursor = "pointer";
-        btn.style.minWidth = "108px";
-        btn.style.outline = "none";
-        btn.style.letterSpacing = "0.5px";
-
-        btn.onpointerdown = function() {
-            btn.style.background = colors[t.id];
-            btn.style.color = "#111";
-            btn.style.transform = "scale(0.97)";
-        };
-        btn.onpointerup = btn.onpointerleave = function() {
-            btn.style.background = "#222";
-            btn.style.color = colors[t.id];
-            btn.style.transform = "scale(1)";
-        };
-
+        btn.onclick = () => selectObjective(t.id);
         list.appendChild(btn);
     });
 }
@@ -347,12 +232,12 @@ function selectObjective(type) {
     searchTargetType = type;
     const playerMark = markers.find(m => m.type === 'PLAYER');
     if (!playerMark) return;
-    const candidates = markers.filter(mark => mark.type === searchTargetType && typeof mark.gx === "number" && typeof mark.gy === "number" && !isNaN(mark.gx) && !isNaN(mark.gy));
+    const candidates = markers.filter(mark => mark.type === searchTargetType && mark.gx !== undefined);
     if (candidates.length > 0) {
         let nearest = candidates[0];
         let minDist = Infinity;
         candidates.forEach(c => {
-            const d = Math.sqrt((playerMark.gx - c.gx)**2 + (playerMark.gy - c.gy)**2);
+            const d = Math.sqrt((playerMark.gx - c.gx) ** 2 + (playerMark.gy - c.gy) ** 2);
             if (d < minDist) { minDist = d; nearest = c; }
         });
         updateTacticalHUD(playerMark, nearest);
@@ -363,140 +248,21 @@ function selectObjective(type) {
 }
 
 function saveAndRender() {
-    // Don't let duplicate AIRDROP markers persist
-    let foundAirdrop = false;
-    markers = markers.filter(m => {
-        if (m.type !== "AIRDROP") return true;
-        if (!foundAirdrop) { foundAirdrop = true; return true; }
-        // remove duplicates
-        return false;
-    });
-
-    const truths = markers.filter(m => typeof m.gx === 'number' && typeof m.gy === 'number' && !isNaN(m.gx) && !isNaN(m.gy));
-
+    const truths = markers.filter(m => m.gx !== undefined && m.gy !== undefined);
     if (truths.length >= 2) {
         let sXp = 0, sYp = 0, sXg = 0, sYg = 0;
         truths.forEach(m => { sXp += m.x; sYp += m.y; sXg += m.gx; sYg += m.gy; });
-        const aXp = sXp/truths.length, aYp = sYp/truths.length, aXg = sXg/truths.length, aYg = sYg/truths.length;
+        const aXp = sXp / truths.length, aYp = sYp / truths.length, aXg = sXg / truths.length, aYg = sYg / truths.length;
         let numX = 0, denX = 0, numY = 0, denY = 0;
         truths.forEach(m => {
-            numX += (m.x - aXp) * (m.gx - aXg); denX += (m.x - aXp)**2;
-            numY += (m.y - aYp) * (m.gy - aYg); denY += (m.y - aYp)**2;
+            numX += (m.x - aXp) * (m.gx - aXg); denX += (m.x - aXp) ** 2;
+            numY += (m.y - aYp) * (m.gy - aYg); denY += (m.y - aYp) ** 2;
         });
         mapConfig.scaleX = numX / (denX || 1); mapConfig.scaleY = numY / (denY || 1);
         mapConfig.offsetX = aXg - (aXp * mapConfig.scaleX); mapConfig.offsetY = aYg - (aYp * mapConfig.scaleY);
         mapConfig.active = true;
     }
     localStorage.setItem('savedMarkers', JSON.stringify(markers));
-}
-
-function showDeleteMarkerModal(marker, x, y) {
-    let existing = document.getElementById("delete-marker-modal");
-    if (existing) existing.remove();
-
-    let modal = document.createElement("div");
-    modal.id = "delete-marker-modal";
-    modal.style.position = "fixed";
-    modal.style.left = "0";
-    modal.style.top = "0";
-    modal.style.width = "100vw";
-    modal.style.height = "100vh";
-    modal.style.display = "flex";
-    modal.style.alignItems = "center";
-    modal.style.justifyContent = "center";
-    modal.style.background = "rgba(0,0,0,0.36)";
-    modal.style.zIndex = 3333;
-
-    let box = document.createElement("div");
-    box.style.background = "#181818";
-    box.style.color = "#fff";
-    box.style.padding = "28px 24px 24px 24px";
-    box.style.borderRadius = "14px";
-    box.style.boxShadow = "0px 4px 32px rgba(0,0,0,0.39)";
-    box.style.display = "flex";
-    box.style.flexDirection = "column";
-    box.style.alignItems = "center";
-    box.style.justifyContent = "center";
-    box.style.minWidth = "210px";
-    box.style.maxWidth = "80vw";
-
-    let title = document.createElement("div");
-    title.style.fontWeight = "bold";
-    title.style.fontSize = "1.18em";
-    title.style.marginBottom = "10px";
-    title.style.letterSpacing = "0.5px";
-    title.style.color = "#ffff00";
-    if(marker.type === "PLAYER") {
-        title.innerText = "Delete Your Position?";
-    } else if(marker.type === "AIRDROP") {
-        title.innerText = "Delete This Airdrop?";
-    } else {
-        title.innerText = "Delete Marker?";
-    }
-    box.appendChild(title);
-
-    let loc = document.createElement("div");
-    loc.innerText = marker.label || marker.type;
-    loc.style.fontSize = "1em";
-    loc.style.marginBottom = "17px";
-    loc.style.color = "#eee";
-    loc.style.textAlign = "center";
-    box.appendChild(loc);
-
-    let btnRow = document.createElement("div");
-    btnRow.style.display = "flex";
-    btnRow.style.justifyContent = "center";
-    btnRow.style.width = "100%";
-    btnRow.style.gap = "16px";
-
-    let delBtn = document.createElement("button");
-    delBtn.innerText = "Delete";
-    delBtn.style.background = "#e84542";
-    delBtn.style.color = "#fff";
-    delBtn.style.border = "none";
-    delBtn.style.padding = "9px 24px";
-    delBtn.style.fontWeight = "bold";
-    delBtn.style.borderRadius = "7px";
-    delBtn.style.fontSize = "1.0em";
-    delBtn.style.boxShadow = "0 2px 7px rgba(0,0,0,0.20)";
-    delBtn.style.cursor = "pointer";
-    delBtn.onclick = function() {
-        markers = markers.filter(mark => mark !== marker);
-        if (activeTarget === marker) activeTarget = null;
-        document.body.removeChild(modal);
-        saveAndRender();
-    };
-
-    let cancelBtn = document.createElement("button");
-    cancelBtn.innerText = "Cancel";
-    cancelBtn.style.background = "#222";
-    cancelBtn.style.color = "#bbb";
-    cancelBtn.style.border = "1.5px solid #477";
-    cancelBtn.style.padding = "9px 18px";
-    cancelBtn.style.fontWeight = "bold";
-    cancelBtn.style.borderRadius = "7px";
-    cancelBtn.style.fontSize = "1.0em";
-    cancelBtn.style.marginLeft = "7px";
-    cancelBtn.style.boxShadow = "0 1px 3px rgba(0,0,0,0.10)";
-    cancelBtn.style.cursor = "pointer";
-    cancelBtn.onclick = function() {
-        document.body.removeChild(modal);
-    };
-
-    btnRow.appendChild(delBtn);
-    btnRow.appendChild(cancelBtn);
-
-    box.appendChild(btnRow);
-
-    modal.appendChild(box);
-
-    modal.addEventListener("click", function(e){
-        if (e.target === modal) {
-            document.body.removeChild(modal);
-        }
-    });
-
-    document.body.appendChild(modal);
 }
 
 function render() {
@@ -506,14 +272,12 @@ function render() {
         view.x += (targetView.x - view.x) * lerp;
         view.y += (targetView.y - view.y) * lerp;
     }
+
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     ctx.translate(view.x, view.y);
     ctx.scale(view.zoom, view.zoom);
     ctx.drawImage(mapImg, 0, 0);
-
-    let hudY = canvas.height - 48;
-    if(window.innerWidth < 700) hudY = canvas.height - 52;
 
     const mapMouse = screenToMap(mouseX, mouseY);
     const hovered = getMarkerAtPos(mapMouse.x, mapMouse.y);
@@ -522,134 +286,108 @@ function render() {
     markers.forEach(m => {
         const isCurrentlyPulsing = (m === activeTarget && Date.now() < pulseEndTime);
         const isAlwaysVisible = (m.type === 'PLAYER' || m.type === 'AIRDROP' || isCurrentlyPulsing);
+
         if (showMarkers || isAlwaysVisible) {
             if (isCurrentlyPulsing) {
                 const pulse = (Math.sin(Date.now() / 150) + 1) / 2;
                 ctx.beginPath();
-                ctx.arc(m.x, m.y, (MARKER_PULSE_MIN_RADIUS + pulse * (MARKER_PULSE_MAX_RADIUS - MARKER_PULSE_MIN_RADIUS)) / view.zoom, 0, Math.PI * 2);
+                ctx.arc(m.x, m.y, (10 + pulse * 30) / view.zoom, 0, Math.PI * 2);
                 ctx.strokeStyle = colors[m.type];
-                ctx.lineWidth = MARKER_PULSE_LINE_WIDTH / view.zoom;
+                ctx.lineWidth = 4 / view.zoom;
                 ctx.stroke();
             }
+
             ctx.beginPath();
-            ctx.arc(m.x, m.y, MARKER_BASE_RADIUS / view.zoom, 0, Math.PI * 2);
+            ctx.arc(m.x, m.y, 8 / view.zoom, 0, Math.PI * 2);
             ctx.fillStyle = colors[m.type];
             ctx.fill();
             ctx.strokeStyle = isCurrentlyPulsing ? "white" : "rgba(255,255,255,0.8)";
-            ctx.lineWidth = MARKER_LINE_WIDTH / view.zoom;
+            ctx.lineWidth = 2 / view.zoom;
             ctx.stroke();
+
             if (showMarkers || m.type === 'PLAYER' || m.type === 'AIRDROP' || isCurrentlyPulsing) {
                 if (m === hovered || isCurrentlyPulsing || m.type === 'PLAYER') {
-                    ctx.font = `bold ${MARKER_FONT_SIZE / view.zoom}px sans-serif`;
+                    ctx.font = `bold ${14 / view.zoom}px sans-serif`;
                     ctx.fillStyle = "white";
-                    ctx.fillText(getCleanName(m.label), m.x + (MARKER_BASE_RADIUS + 4) / view.zoom, m.y - (MARKER_BASE_RADIUS + 4) / view.zoom);
+                    ctx.fillText(getCleanName(m.label), m.x + (12 / view.zoom), m.y - (12 / view.zoom));
                 }
             }
         }
     });
 
     ctx.setTransform(1, 0, 0, 1, 0, 0);
+    let hudText = isWaitingForLocationClick ? "CLICK YOUR POSITION" : `X: ${g.x}, Y: ${g.y}`;
+    let hudColor = isWaitingForLocationClick ? "#00ffff" : "#6AD44C";
 
-    // ======== CHANGED: Remove "Click your position"/"Tap your position", only show XY or LOCKED ========
-    let hudText = `X: ${g.x}, Y: ${g.y}`;
-    let hudColor = "#6AD44C";
-
-    if (hovered && typeof hovered.gx === 'number' && typeof hovered.gy === 'number' && !isNaN(hovered.gx) && !isNaN(hovered.gy)) {
+    if (hovered && hovered.gx !== undefined) {
         hudText = `LOCKED: ${hovered.gx}, ${hovered.gy}`;
         hudColor = colors[hovered.type];
     }
 
     ctx.fillStyle = "rgba(0,0,0,0.8)";
-    const boxW = ctx.measureText(hudText).width+15;
-    ctx.fillRect(mouseX+10, mouseY+10, boxW, 32);
+    ctx.fillRect(mouseX + 15, mouseY + 15, ctx.measureText(hudText).width + 12, 25);
     ctx.fillStyle = hudColor;
-    ctx.font = "bold 13px sans-serif";
-    ctx.fillText(hudText, mouseX+17, mouseY+31);
+    ctx.font = "bold 12px sans-serif";
+    ctx.fillText(hudText, mouseX + 21, mouseY + 32);
 
     requestAnimationFrame(render);
 }
 
-/** INPUT HANDLERS (Touch + Mouse) **/
+/** INPUT HANDLERS **/
 
-function singlePointerCanvasXY(e, strict) {
-    let x = 0, y = 0;
-    if (e.touches && e.touches.length > 0) {
-        const r = canvas.getBoundingClientRect();
+// Unified pointer-to-map util for desktop (mouse) or mobile (touch)
+function pointerToCanvas(e) {
+    const r = canvas.getBoundingClientRect();
+    let x, y;
+    if (e.touches && e.touches.length) {
         x = e.touches[0].clientX - r.left;
         y = e.touches[0].clientY - r.top;
-    } else if (e.changedTouches && e.changedTouches.length > 0) {
-        const r = canvas.getBoundingClientRect();
+    } else if (e.changedTouches && e.changedTouches.length) {
         x = e.changedTouches[0].clientX - r.left;
         y = e.changedTouches[0].clientY - r.top;
-    } else if (e.clientX !== undefined && e.clientY !== undefined) {
-        const r = canvas.getBoundingClientRect();
+    } else {
         x = e.clientX - r.left;
         y = e.clientY - r.top;
-    } else if (strict) {
-        return null;
     }
-    return {x, y};
+    return { x, y };
 }
 
-function handlePointerDown(sx, sy, origEvent) {
+// --- Mouse handlers ---
+canvas.addEventListener('mousedown', (e) => {
+    const { x: sx, y: sy } = pointerToCanvas(e);
     const mapPos = screenToMap(sx, sy);
     const m = getMarkerAtPos(mapPos.x, mapPos.y);
 
-    if (isWaitingForLocationClick) {
-        const myC = getGameCoords(mapPos.x, mapPos.y);
-        const playerMark = { x: mapPos.x, y: mapPos.y, type: 'PLAYER', label: "Me", gx: myC.x, gy: myC.y, timestamp: Date.now() };
-        markers = markers.filter(mark => mark.type !== 'PLAYER');
-        markers.push(playerMark);
-        isWaitingForLocationClick = false;
-        if (pendingAirdropCalculation) {
-            const lastDrop = markers.filter(mark => mark.type === 'AIRDROP').pop();
-            if (lastDrop) updateTacticalHUD(playerMark, lastDrop);
-            pendingAirdropCalculation = false;
-        } else {
-            showObjectiveMenu();
-        }
-        saveAndRender();
-        return;
-    }
+    mouseX = sx;
+    mouseY = sy;
 
-    if (origEvent && origEvent.type === 'touchstart') {
-        let longPressTimer = setTimeout(() => {
-            if (m && (m.type === 'AIRDROP' || m.type === 'PLAYER')) {
-                showDeleteMarkerModal(m, sx, sy);
-            }
-        }, 600);
-        const removeListener = ()=>{
-            clearTimeout(longPressTimer);
-            canvas.removeEventListener('touchend',removeListener);
-            canvas.removeEventListener('touchmove',removeListener);
-            canvas.removeEventListener('touchcancel',removeListener);
-        };
-        canvas.addEventListener('touchend',removeListener);
-        canvas.addEventListener('touchmove',removeListener);
-        canvas.addEventListener('touchcancel',removeListener);
-        origEvent.preventDefault();
-    } else {
-        isDragging = true;
-        lastMouseX = sx;
-        lastMouseY = sy;
-    }
-}
-
-canvas.addEventListener('mousedown', (e) => {
     if (e.button === 0) {
-        const pt = singlePointerCanvasXY(e, true);
-        handlePointerDown(pt.x, pt.y, false);
+        if (isWaitingForLocationClick) {
+            const myC = getGameCoords(mapPos.x, mapPos.y);
+            const playerMark = { x: mapPos.x, y: mapPos.y, type: 'PLAYER', label: "Me", gx: myC.x, gy: myC.y, timestamp: Date.now() };
+            markers = markers.filter(mark => mark.type !== 'PLAYER');
+            markers.push(playerMark);
+            isWaitingForLocationClick = false;
+            if (pendingAirdropCalculation) {
+                const lastDrop = markers.filter(mark => mark.type === 'AIRDROP').pop();
+                if (lastDrop) updateTacticalHUD(playerMark, lastDrop);
+                pendingAirdropCalculation = false;
+            } else {
+                showObjectiveMenu();
+            }
+            saveAndRender();
+            return;
+        }
     }
-    if (e.button === 1 || e.button === 0) {
+
+    if (e.button === 1 || (e.button === 0)) {
         isDragging = true;
         lastMouseX = e.clientX;
         lastMouseY = e.clientY;
     }
+
     if (e.button === 2) {
         e.preventDefault();
-        const pt = singlePointerCanvasXY(e, true);
-        const mapPos = screenToMap(pt.x, pt.y);
-        const m = getMarkerAtPos(mapPos.x, mapPos.y);
         if (m && (m.type === 'AIRDROP' || m.type === 'PLAYER')) {
             markers = markers.filter(mark => mark !== m);
             if (activeTarget === m) activeTarget = null;
@@ -661,14 +399,16 @@ canvas.addEventListener('mousedown', (e) => {
 canvas.addEventListener('contextmenu', (e) => e.preventDefault());
 
 window.addEventListener('mousemove', (e) => {
-    const pt = singlePointerCanvasXY(e, true);
-    mouseX = pt.x;
-    mouseY = pt.y;
+    const r = canvas.getBoundingClientRect();
+    mouseX = e.clientX - r.left;
+    mouseY = e.clientY - r.top;
     if (isDragging) {
         targetView.x += e.clientX - lastMouseX;
         targetView.y += e.clientY - lastMouseY;
         lastMouseX = e.clientX;
         lastMouseY = e.clientY;
+
+        // Apply clamping and force view to target for responsive feel
         clampView();
         view.x = targetView.x;
         view.y = targetView.y;
@@ -683,105 +423,163 @@ canvas.addEventListener('wheel', (e) => {
     let newZoom = targetView.zoom + scaleAmount;
     if (newZoom < MIN_ZOOM) newZoom = MIN_ZOOM;
     if (newZoom > MAX_ZOOM) newZoom = MAX_ZOOM;
+
     const mapMouse = screenToMap(mouseX, mouseY);
     targetView.zoom = newZoom;
-    view.zoom = newZoom;
+    view.zoom = newZoom; // Update immediate view for the coord math below
+
     targetView.x = mouseX - mapMouse.x * targetView.zoom;
     targetView.y = mouseY - mapMouse.y * targetView.zoom;
+
     clampView();
+    // Match current view to target for zoom responsiveness
     view.x = targetView.x;
     view.y = targetView.y;
 }, { passive: false });
 
-canvas.addEventListener('touchstart', (e) => {
-    if (e.touches.length === 1) {
-        const pt = singlePointerCanvasXY(e, true);
-        mouseX = pt.x;
-        mouseY = pt.y;
-        handlePointerDown(pt.x, pt.y, e);
-        isDragging = true;
-        lastMouseX = pt.x;
-        lastMouseY = pt.y;
-    }
-    if (e.touches.length === 2) {
-        isDragging = false;
-        lastTouchDistance = Math.hypot(
-            e.touches[0].clientX - e.touches[1].clientX,
-            e.touches[0].clientY - e.touches[1].clientY
-        );
-        lastCenter = {
-            x: (e.touches[0].clientX + e.touches[1].clientX)/2 - canvas.getBoundingClientRect().left,
-            y: (e.touches[0].clientY + e.touches[1].clientY)/2 - canvas.getBoundingClientRect().top
-        };
-    }
-}, {passive: false});
+// --- Mobile touch support below! ---
 
-canvas.addEventListener('touchmove', (e) => {
-    if (e.touches.length === 1 && isDragging) {
-        const pt = {
-            x: e.touches[0].clientX - canvas.getBoundingClientRect().left,
-            y: e.touches[0].clientY - canvas.getBoundingClientRect().top
-        };
-        targetView.x += pt.x - lastMouseX;
-        targetView.y += pt.y - lastMouseY;
-        lastMouseX = pt.x;
-        lastMouseY = pt.y;
-        clampView();
-        view.x = targetView.x;
-        view.y = targetView.y;
-        e.preventDefault();
-    }
-    if (e.touches.length === 2) {
-        let thisDist = Math.hypot(
-            e.touches[0].clientX - e.touches[1].clientX,
-            e.touches[0].clientY - e.touches[1].clientY
-        );
-        let centerPt = {
-            x: (e.touches[0].clientX + e.touches[1].clientX)/2 - canvas.getBoundingClientRect().left,
-            y: (e.touches[0].clientY + e.touches[1].clientY)/2 - canvas.getBoundingClientRect().top
-        };
-        let scaleAmount = (thisDist - lastTouchDistance) * 0.005;
-        let newZoom = targetView.zoom + scaleAmount;
-        if (newZoom < MIN_ZOOM) newZoom = MIN_ZOOM;
-        if (newZoom > MAX_ZOOM) newZoom = MAX_ZOOM;
-        const m = screenToMap(centerPt.x, centerPt.y);
-        targetView.zoom = newZoom;
-        view.zoom = newZoom;
-        targetView.x = centerPt.x - m.x * newZoom;
-        targetView.y = centerPt.y - m.y * newZoom;
-        lastTouchDistance = thisDist;
-        lastCenter = centerPt;
-        clampView();
-        view.x = targetView.x;
-        view.y = targetView.y;
-        e.preventDefault();
-    }
-});
+// Track touch states for drag
+let touchDragging = false;
+let lastTouchX = 0, lastTouchY = 0;
+let pinchZooming = false;
+let pinchStartDist = 0;
+let pinchStartZoom = 0;
+let pinchStartViewX = 0;
+let pinchStartViewY = 0;
+let pinchMidpoint = { x: 0, y: 0 };
 
-canvas.addEventListener('touchend', (e) => {
-    isDragging = false;
-    lastTouchDistance = null;
-    lastCenter = null;
-});
-
-function toggleVisibility() {
-    showMarkers = !showMarkers;
-    if(window.innerWidth <= 700) {
-        let btnEl = document.getElementById("hideShowBtn");
-        if (btnEl)
-            btnEl.innerText = showMarkers ? "Hide Markers" : "Show Markers";
-    }
+// Helper: distance between two touches
+function getDistance(t0, t1) {
+    return Math.sqrt((t1.clientX - t0.clientX) ** 2 + (t1.clientY - t0.clientY) ** 2);
+}
+// Helper: midpoint between two touches
+function getMidpoint(t0, t1) {
+    return {
+        x: (t0.clientX + t1.clientX) / 2,
+        y: (t0.clientY + t1.clientY) / 2
+    };
 }
 
-// --- NEW RESET LOGIC: Removes all PLAYER and AIRDROP markers but keeps master landmarks ---
-// No more auto-zoom reset; view remains unchanged, just removes markers.
-window.resetAllMarkers = function() {
-    markers = markers.filter(m => m.type !== 'PLAYER' && m.type !== 'AIRDROP');
-    saveAndRender();
-    // No auto-zoom/view reset.
-};
+canvas.addEventListener('touchstart', function (e) {
+    if (e.touches.length === 1) {
+        // Single-finger: drag or tap
+        const { x, y } = pointerToCanvas(e);
+        mouseX = x;
+        mouseY = y;
+        lastTouchX = e.touches[0].clientX;
+        lastTouchY = e.touches[0].clientY;
+        touchDragging = true;
+    }
+    if (e.touches.length === 2) {
+        pinchZooming = true;
+        const t0 = e.touches[0], t1 = e.touches[1];
+        pinchStartDist = getDistance(t0, t1);
+        pinchMidpoint = getMidpoint(t0, t1);
+        pinchStartZoom = targetView.zoom;
+        // Save pixel-space reference for pan fix during pinch
+        pinchStartViewX = targetView.x;
+        pinchStartViewY = targetView.y;
+    }
+}, { passive: false });
+
+canvas.addEventListener('touchmove', function(e) {
+    e.preventDefault();
+    if (pinchZooming && e.touches.length === 2) {
+        const t0 = e.touches[0], t1 = e.touches[1];
+        const newDist = getDistance(t0, t1);
+        let scale = newDist / pinchStartDist;
+        let newZoom = pinchStartZoom * scale;
+        newZoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, newZoom));
+        // Keep the map centered on the fingers' midpoint (screen space)
+        const r = canvas.getBoundingClientRect();
+        let midpointX = (t0.clientX + t1.clientX) / 2 - r.left;
+        let midpointY = (t0.clientY + t1.clientY) / 2 - r.top;
+        const mapMid = screenToMap(midpointX, midpointY);
+
+        targetView.zoom = newZoom;
+        view.zoom = newZoom; // Responsiveness
+        targetView.x = midpointX - mapMid.x * targetView.zoom;
+        targetView.y = midpointY - mapMid.y * targetView.zoom;
+        clampView();
+        view.x = targetView.x;
+        view.y = targetView.y;
+    } else if (touchDragging && e.touches.length === 1) {
+        const dx = e.touches[0].clientX - lastTouchX;
+        const dy = e.touches[0].clientY - lastTouchY;
+        targetView.x += dx;
+        targetView.y += dy;
+        lastTouchX = e.touches[0].clientX;
+        lastTouchY = e.touches[0].clientY;
+        clampView();
+        view.x = targetView.x;
+        view.y = targetView.y;
+        // Update mouseX/mouseY for hud
+        const r = canvas.getBoundingClientRect();
+        mouseX = e.touches[0].clientX - r.left;
+        mouseY = e.touches[0].clientY - r.top;
+    }
+}, { passive: false });
+
+canvas.addEventListener('touchend', function(e) {
+    if (pinchZooming && e.touches.length < 2) {
+        pinchZooming = false;
+    }
+    if (touchDragging && e.touches.length === 0) {
+        touchDragging = false;
+    }
+    // Tap/click handling on touchend (for marker add/select/remove etc)
+    if (!(pinchZooming || touchDragging) && (e.changedTouches && e.changedTouches.length === 1)) {
+        const r = canvas.getBoundingClientRect();
+        let tx = e.changedTouches[0].clientX - r.left;
+        let ty = e.changedTouches[0].clientY - r.top;
+        mouseX = tx;
+        mouseY = ty;
+        const mapPos = screenToMap(tx, ty);
+        const m = getMarkerAtPos(mapPos.x, mapPos.y);
+        if (isWaitingForLocationClick) {
+            const myC = getGameCoords(mapPos.x, mapPos.y);
+            const playerMark = { x: mapPos.x, y: mapPos.y, type: 'PLAYER', label: "Me", gx: myC.x, gy: myC.y, timestamp: Date.now() };
+            markers = markers.filter(mark => mark.type !== 'PLAYER');
+            markers.push(playerMark);
+            isWaitingForLocationClick = false;
+            if (pendingAirdropCalculation) {
+                const lastDrop = markers.filter(mark => mark.type === 'AIRDROP').pop();
+                if (lastDrop) updateTacticalHUD(playerMark, lastDrop);
+                pendingAirdropCalculation = false;
+            } else {
+                showObjectiveMenu();
+            }
+            saveAndRender();
+            return;
+        } else if (m && (m.type === 'AIRDROP' || m.type === 'PLAYER')) {
+            // Long tap to remove marker (simulate right click)
+            // Let's require ~0.45s tap-and-hold for "remove":
+            let removeTimeout = setTimeout(() => {
+                markers = markers.filter(mark => mark !== m);
+                if (activeTarget === m) activeTarget = null;
+                saveAndRender();
+            }, 450);
+            canvas.addEventListener('touchmove', cancelRemoveMarker, { once: true });
+
+            function cancelRemoveMarker() {
+                clearTimeout(removeTimeout);
+            }
+        } else {
+            // Could add marker selection, but mobile users will use objective buttons.
+        }
+    }
+}, { passive: false });
+
+// Prevent scrolling when touching canvas (mobile web fix)
+canvas.addEventListener('touchstart', (e) => { e.preventDefault(); }, { passive: false });
+
+// --- End of mobile support section ---
+
+function toggleVisibility() { showMarkers = !showMarkers; }
 
 render();
 
-// Made by Phoxphor
-// I dont know how to make mobile ports so this is scuffed as fuck
+// Made By Phoxphor
+// Don't steal my code, don't be a bitch.
+// Ps my code is complete dogshit yes i know theres a thousand ways to improve this shut the fuck up.
