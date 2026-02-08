@@ -115,124 +115,18 @@ function getMarkerAtPos(mapX, mapY) {
     return candidates[0];
 }
 
+// Auto-zoom functions removed
+
 function animateZoomToFit(p1, p2, duration = 600, customZoom=null) {
-    const padding = 200;
-    const centerX = (p1.x + p2.x) / 2;
-    const centerY = (p1.y + p2.y) / 2;
-    const dx = Math.abs(p1.x - p2.x);
-    const dy = Math.abs(p1.y - p2.y);
-
-    let zoomX = (canvas.width - padding) / (dx || 1);
-    let zoomY = (canvas.height - padding) / (dy || 1);
-    let newZoom;
-
-    if (customZoom !== null && !isNaN(customZoom)) {
-        newZoom = Math.max(MIN_ZOOM, Math.min(customZoom, MAX_ZOOM));
-    } else {
-        newZoom = Math.min(zoomX, zoomY, 1.2);
-        newZoom = Math.max(newZoom, MIN_ZOOM);
-    }
-
-    const newX = (canvas.width / 2) - (centerX * newZoom);
-    const newY = (canvas.height / 2) - (centerY * newZoom);
-
-    const start = { x: view.x, y: view.y, zoom: view.zoom };
-    const end = { x: newX, y: newY, zoom: newZoom };
-    const tviewStart = { x: targetView.x, y: targetView.y, zoom: targetView.zoom };
-    const startTime = performance.now();
-
-    function easeInOut(t) {
-        return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
-    }
-
-    function step(now) {
-        let t = Math.min(1, (now - startTime) / duration);
-        let e = easeInOut(t);
-        view.x = start.x + (end.x - start.x) * e;
-        view.y = start.y + (end.y - start.y) * e;
-        view.zoom = start.zoom + (end.zoom - start.zoom) * e;
-        targetView.x = tviewStart.x + (end.x - tviewStart.x) * e;
-        targetView.y = tviewStart.y + (end.y - tviewStart.y) * e;
-        targetView.zoom = tviewStart.zoom + (end.zoom - tviewStart.zoom) * e;
-        clampView();
-        if (t < 1) {
-            requestAnimationFrame(step);
-        } else {
-            view.x = end.x;
-            view.y = end.y;
-            view.zoom = end.zoom;
-            targetView.x = end.x;
-            targetView.y = end.y;
-            targetView.zoom = end.zoom;
-        }
-    }
-
-    requestAnimationFrame(step);
+    // REMOVED: This function is intentionally empty due to removal of auto zoom.
 }
 
 function zoomToAirdropSmooth(airdropMarker) {
-    // Center and smoothly zoom in to the given airdrop marker
-    if (!airdropMarker) return;
-    const padding = 120;
-    const targetZoom = Math.max(0.9, Math.min(Math.min(
-        canvas.width / 350,
-        canvas.height / 350
-    ), MAX_ZOOM));
-    const cx = airdropMarker.x;
-    const cy = airdropMarker.y;
-    const zoom = targetZoom;
-
-    const destX = (canvas.width / 2) - (cx * zoom);
-    const destY = (canvas.height / 2) - (cy * zoom);
-
-    const start = { x: view.x, y: view.y, zoom: view.zoom };
-    const end = { x: destX, y: destY, zoom };
-    const tviewStart = { x: targetView.x, y: targetView.y, zoom: targetView.zoom };
-    const startTime = performance.now();
-    const duration = 750; // Keep a bit slower for a nice "float" effect
-
-    function easeInOut(t) {
-        return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
-    }
-
-    function step(now) {
-        let t = Math.min(1, (now - startTime) / duration);
-        let e = easeInOut(t);
-        view.x = start.x + (end.x - start.x) * e;
-        view.y = start.y + (end.y - start.y) * e;
-        view.zoom = start.zoom + (end.zoom - start.zoom) * e;
-        targetView.x = tviewStart.x + (end.x - tviewStart.x) * e;
-        targetView.y = tviewStart.y + (end.y - tviewStart.y) * e;
-        targetView.zoom = tviewStart.zoom + (end.zoom - tviewStart.zoom) * e;
-        clampView();
-        if (t < 1) {
-            requestAnimationFrame(step);
-        } else {
-            view.x = end.x;
-            view.y = end.y;
-            view.zoom = end.zoom;
-            targetView.x = end.x;
-            targetView.y = end.y;
-            targetView.zoom = end.zoom;
-        }
-    }
-    requestAnimationFrame(step);
+    // REMOVED: This function is intentionally empty due to removal of auto zoom.
 }
 
 function zoomToFit(p1, p2) {
-    const padding = 200;
-    const centerX = (p1.x + p2.x) / 2;
-    const centerY = (p1.y + p2.y) / 2;
-    const dx = Math.abs(p1.x - p2.x);
-    const dy = Math.abs(p1.y - p2.y);
-    let zoomX = (canvas.width - padding) / (dx || 1);
-    let zoomY = (canvas.height - padding) / (dy || 1);
-    let newZoom = Math.min(zoomX, zoomY, 1.2);
-    newZoom = Math.max(newZoom, MIN_ZOOM);
-    targetView.zoom = newZoom;
-    targetView.x = (canvas.width / 2) - (centerX * newZoom);
-    targetView.y = (canvas.height / 2) - (centerY * newZoom);
-    clampView();
+    // REMOVED: This function is intentionally empty due to removal of auto zoom.
 }
 
 function updateTacticalHUD(player, target) {
@@ -282,21 +176,7 @@ function updateTacticalHUD(player, target) {
             </div>
         </div>
     `;
-    // If player and airdrop are at the same spot, still zoom to a reasonable default
-    if (
-        player &&
-        target &&
-        player.x === target.x &&
-        player.y === target.y
-    ) {
-        const targetZoom = Math.max(0.9, Math.min(Math.min(
-            canvas.width / 350,
-            canvas.height / 350
-        ), MAX_ZOOM));
-        animateZoomToFit(player, target, 600, targetZoom);
-    } else if (player && target) {
-        animateZoomToFit(player, target, 600);
-    }
+    // Auto-zoom removed: no longer zoom on new target or player/target overlap
 }
 
 function getDirection(from, to) {
@@ -390,8 +270,7 @@ function addAirdrop() {
     } else {
         pendingAirdropCalculation = true;
         isWaitingForLocationClick = true;
-        // --- Smoothly zoom to the airdrop marker ---
-        zoomToAirdropSmooth(airdropMark);
+        // Auto-zoom removed: no longer zoom to the airdrop marker
         document.getElementById('cal-info').innerText = "AIRDROP ADDED. TAP YOUR POSITION.";
     }
 }
@@ -901,58 +780,11 @@ function toggleVisibility() {
 }
 
 // --- NEW RESET LOGIC: Removes all PLAYER and AIRDROP markers but keeps master landmarks ---
-// Also resets and animates view to show the entire map
+// No more auto-zoom reset; view remains unchanged, just removes markers.
 window.resetAllMarkers = function() {
     markers = markers.filter(m => m.type !== 'PLAYER' && m.type !== 'AIRDROP');
-
-    const mapWidth = canvas.width;
-    const mapHeight = canvas.height;
-    const imgWidth = mapImg.naturalWidth || mapImg.width;
-    const imgHeight = mapImg.naturalHeight || mapImg.height;
-
-    const PAD = 20;
-    const scaleX = (mapWidth - 2*PAD) / imgWidth;
-    const scaleY = (mapHeight - 2*PAD) / imgHeight;
-    const fitZoom = Math.min(scaleX, scaleY);
-
-    const targetZoom = Math.max(MIN_ZOOM, Math.min(fitZoom, MAX_ZOOM));
-    const targetX = (mapWidth/2) - (imgWidth/2) * targetZoom;
-    const targetY = (mapHeight/2) - (imgHeight/2) * targetZoom;
-
-    const startView = { x: view.x, y: view.y, zoom: view.zoom };
-    const endView = { x: targetX, y: targetY, zoom: targetZoom };
-    const startTime = performance.now();
-    const duration = 400;
-
-    function animateReset(now) {
-        let t = Math.min(1, (now - startTime) / duration);
-        t = t < 0.5
-            ? 2*t*t
-            : -1 + (4-2*t)*t;
-
-        view.x = startView.x + (endView.x - startView.x) * t;
-        view.y = startView.y + (endView.y - startView.y) * t;
-        view.zoom = startView.zoom + (endView.zoom - startView.zoom) * t;
-        targetView.x = view.x;
-        targetView.y = view.y;
-        targetView.zoom = view.zoom;
-        clampView();
-        render();
-        if (t < 1) {
-            requestAnimationFrame(animateReset);
-        } else {
-            view.x = endView.x;
-            view.y = endView.y;
-            view.zoom = endView.zoom;
-            targetView.x = endView.x;
-            targetView.y = endView.y;
-            targetView.zoom = endView.zoom;
-            render();
-        }
-    }
-
     saveAndRender();
-    requestAnimationFrame(animateReset);
+    // No auto-zoom/view reset.
 };
 
 render();
