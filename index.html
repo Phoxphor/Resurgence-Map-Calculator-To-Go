@@ -86,13 +86,10 @@
         }
         .ctrl-ico:hover, .ctrl-ico:active { background:#363; box-shadow:0 6px 22px #161b; transform:scale(1.06);}
         .ctrl-ico[data-color="gold"] { background:#4e4010; color:#ffe700;}
-        .ctrl-ico[data-color="gold"]:hover { background:#806610; }
         .ctrl-ico[data-color="green"] { background:#2b4d24; color:#6AD44C;}
-        .ctrl-ico[data-color="green"]:hover { background:#377b2d;}
         .ctrl-ico[data-color="blue"] { background:#273651; color:#7bdfff;}
-        .ctrl-ico[data-color="blue"]:hover { background:#304d80;}
         .ctrl-ico[data-color="gray"] { background:#444; color:#fff;}
-        .ctrl-ico[data-color="gray"]:hover { background:#666!important;}
+
         #cal-info {
             font-size:clamp(0.82rem, 2.2vw, 1.1rem);
             padding:4px 10px;
@@ -109,28 +106,74 @@
             overflow:hidden;
             white-space:nowrap;
         }
-        /* Remove previous forced downscaling at certain breakpoints (handled above with clamp) */
-        /* Responsive font-size, button and overlay sizing is now handled by clamp() above! */
+
+        #corner-overlay {
+            position: fixed;
+            pointer-events: none;
+            top: min(12px, 2.3vw);
+            left: min(15px, 2.3vw);
+            z-index: 100;
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+            user-select: none;
+        }
+        .corner-title {
+            font-size: clamp(0.73rem, 2.7vw, 1.48rem);
+            color: #6AD44C;
+            font-weight: bold;
+            letter-spacing: 1.1px;
+            text-shadow: 0 2px 6px #191, 0 0px 8px #000d;
+            margin-bottom: 1px;
+            padding: 0 8px 0 0;
+            opacity: 0.93;
+            pointer-events: none;
+        }
+        .corner-credit {
+            font-size: clamp(0.59rem, 1.15vw, 0.82rem);
+            color: #fff;
+            opacity: 0.23;
+            margin-top: 0px;
+            margin-bottom: 0;
+            margin-left: 2px;
+            letter-spacing: 0.4px;
+            font-weight: 500;
+            pointer-events: none;
+            text-shadow: 0 0px 7px #3333;
+        }
 
         #map-viewport { flex-grow:1; overflow:hidden; background:#000; position:relative; touch-action:none;}
         canvas { display:block; touch-action:none;}
     </style>
 </head>
 <body>
-<div id="topbar">
-    <div class="mini-title">RMC TO GO</div>
-    <div class="sub-title">Made By Phoxphor</div>
+
+<div id="corner-overlay">
+    <div class="corner-title">RMC TO GO</div>
+    <div class="corner-credit">Made by Phoxphor</div>
 </div>
+
 <div id="map-viewport">
     <canvas id="mapCanvas"></canvas>
+    
     <div id="action-overlay">
         <button class="ctrl-ico" title="Add Airdrop" data-color="gold" onclick="addAirdrop()">&#x1F4E6;</button>
+        
         <button class="ctrl-ico" title="Find Nearest" data-color="green" onclick="findNearest()">&#x1F50E;</button>
+        
+        <button class="ctrl-ico" title="Plane Sync" data-color="blue" onclick="triggerPlaneSyncMode()">&#x1F552;</button>
+        
+        <button class="ctrl-ico" title="Toggle Plane" data-color="gray" onclick="showPlanePath = !showPlanePath">&#x2708;&#xFE0F;</button>
+        
         <button class="ctrl-ico" title="Toggle Icons" data-color="gray" onclick="toggleVisibility()">&#x1F5FA;</button>
+        
         <button class="ctrl-ico" title="Reset Map" data-color="blue" onclick="resetMap()">&#x21BB;</button>
     </div>
 </div>
+
+<script src="plane-system.js"></script>
 <script src="index.js"></script>
+
 <script>
 // --- Ensure default centering on load ---
 window.addEventListener("DOMContentLoaded",()=> {
@@ -146,6 +189,7 @@ window.addEventListener("DOMContentLoaded",()=> {
         }
     }
 });
+
 // Helper for centering to (0,0) - tries to work with main var/view logic
 function setMapViewToZeroZero(smooth=0){
     try{
@@ -153,13 +197,15 @@ function setMapViewToZeroZero(smooth=0){
         let map=window.mapImg;
         if(!map||!canvas) return;
         let v=window.targetView||window.view;
-        let zmin=(window.MIN_ZOOM)||0.8;
-        let zmax=(window.MAX_ZOOM)||2;
-        let zoom=window.targetView && window.targetView.zoom || zmin;
+        
+        // Use default values if constants aren't loaded yet
+        let zmin=(window.MIN_ZOOM)||0.2;
+        let defz=(window.DEF_ZOOM)||0.6;
+        let zoom=window.targetView && window.targetView.zoom || defz;
+        
         let cx=canvas.width/2,cy=canvas.height/2;
         let mx=map.width/2,my=map.height/2;
-        let zx=zoom;
-        let x=cx-mx*zx,y=cy-my*zx;
+        let x=cx-mx*zoom,y=cy-my*zoom;
 
         function updateView(_x,_y,_z) {
             if(window.targetView) { targetView.x=_x;targetView.y=_y;targetView.zoom=_z;}
@@ -167,15 +213,27 @@ function setMapViewToZeroZero(smooth=0){
             if(typeof clampView==="function")clampView();
             if(typeof render==="function")render();
         }
+
         if(smooth>0 && window.targetView){
             let steps=14,cur=0,_x=v.x,_y=v.y,_z=v.zoom;
             let dx=(x-_x)/steps,dy=(y-_y)/steps,dz=(zoom-_z)/steps;
-            let anim=()=>{ if(cur<steps){_x+=dx;_y+=dy;_z+=dz;updateView(_x,_y,_z);cur++;setTimeout(anim,12);}else{updateView(x,y,zoom);} };
+            let anim=()=>{ 
+                if(cur<steps){
+                    _x+=dx;_y+=dy;_z+=dz;
+                    updateView(_x,_y,_z);
+                    cur++;
+                    setTimeout(anim,12);
+                }else{
+                    updateView(x,y,zoom);
+                } 
+            };
             anim();
         }else{
             updateView(x,y,zoom);
         }
-    }catch(e){}
+    }catch(e){
+        console.warn("Centering logic error:", e);
+    }
 }
 // Expose for index.js usage or fallback
 window.centerToZeroZero=()=>setMapViewToZeroZero(0);
