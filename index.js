@@ -102,7 +102,6 @@
 
     // Add a global accessor for updating it
     window._setHudBox = function(html) {
-        // show and set content
         hudBox.style.display = "block";
         document.getElementById('hud-box-compact-txt').innerHTML = html;
     };
@@ -118,6 +117,26 @@
 
 const canvas = document.getElementById('mapCanvas'), ctx = canvas.getContext('2d'), mapImg = new Image();
 mapImg.src = 'Map.jpg';
+
+// -- Button bindings from index.html (Sync, Toggle Markers) --
+document.addEventListener("DOMContentLoaded", function() {
+    // Make sure the elements exist
+    var btnSync = document.getElementById("btn-sync");
+    var btnToggleMarkers = document.getElementById("btn-toggle-markers");
+    if (btnSync) btnSync.addEventListener("click", function() {
+        enterPlaneSyncMode();
+    });
+    if (btnToggleMarkers) btnToggleMarkers.addEventListener("click", function() {
+        toggleVisibility();
+        btnToggleMarkers.innerText = showMarkers ? "Hide Markers" : "Show Markers";
+    });
+});
+
+// Helper for button: enter PLANE SYNC mode, show HUD help
+function enterPlaneSyncMode() {
+    window.isWaitingForPlaneSync = true;
+    window._setHudBox("<div style='font-weight:bold;font-size:1.09em'>Tap on the Plane's position to sync it.</div><div style='padding-top:8px;font-size:0.97em'>Tap the plane's current location on the map, as seen in-game, to sync the rotation and timing for your lobby.<br><br><span style='color:#888;font-size:.94em'>(You can cancel by clicking anywhere else.)</span></div>");
+}
 
 // Mobile-optimized sizing
 function resizeCanvas() {
@@ -138,10 +157,8 @@ const colors = { GREEN:"#6AD44C", BLUE:"#4C92D4", RED:"#EB564F", SAFE:"#F3E57A",
 
 // Center and zoom-to-(0,0) logic
 function centerToZeroZoom(smooth=1) {
-    // Find map pixel for world (0,0) using calibration if available
     let zero = mapConfig.active ? getPixelFromGame(0,0) : {x:mapImg.width/2, y:mapImg.height/2};
     let nx = (canvas.width/2)-(zero.x*DEF_ZOOM), ny=(canvas.height/2)-(zero.y*DEF_ZOOM);
-    // Animate or snap
     if(smooth) {
         let steps=25, dx=(nx-targetView.x)/steps, dy=(ny-targetView.y)/steps, dz=(DEF_ZOOM-targetView.zoom)/steps, i=0;
         let anim=()=>{ 
@@ -308,24 +325,104 @@ function getPixelFromGame(gx,gy){
     if(!mapConfig.active)return null;
     return{x:(gx-mapConfig.offsetX)/mapConfig.scaleX,y:(gy-mapConfig.offsetY)/mapConfig.scaleY};
 }
-function addAirdrop(){
-    let input=prompt("Enter Airdrop Coords (X, Y):");
-    if(!input)return;
-    let p=input.match(/-?\d+(\.\d+)?/g);
-    if(p&&p.length>=2){
-        let gx=+p[0],gy=+p[1],mp=getPixelFromGame(gx,gy)||{x:mapImg.width/2,y:mapImg.height/2}, mark={x:mp.x,y:mp.y,type:'AIRDROP',label:`Airdrop [${gx}, ${gy}]`,gx,gy,timestamp:Date.now()};
-        markers.push(mark);saveMarkers();
-        let player=markers.find(m=>m.type==='PLAYER');
-        if(player)updateTacticalHUD(player,mark);
-        else{
-            pendAir=true;isWaitLoc=true;
+function addAirdrop() {
+    // Remove any existing popup
+    let pop = document.getElementById('add-airdrop-popup');
+    if (pop) pop.remove();
+
+    let popup = document.createElement('div');
+    popup.id = 'add-airdrop-popup';
+    popup.style.position = 'fixed';
+    popup.style.left = '50%';
+    popup.style.top = '50%';
+    popup.style.transform = 'translate(-50%, -50%)';
+    popup.style.background = '#232323';
+    popup.style.color = '#fff';
+    popup.style.padding = '28px 28px 20px 28px';
+    popup.style.borderRadius = '9px';
+    popup.style.boxShadow = '0 8px 32px #000b, 0 1px 2px #355b';
+    popup.style.zIndex = 1000;
+    popup.style.fontFamily = 'inherit';
+    popup.style.minWidth = '260px';
+    popup.style.maxWidth = '92vw';
+    popup.style.textAlign = 'center';
+    popup.style.userSelect = 'none';
+
+    popup.innerHTML = `
+        <div style="font-weight:bold;font-size:1.24em;letter-spacing:1px;margin-bottom:16px;">
+            Add Airdrop Location
+        </div>
+        <div style="margin-bottom:20px;">
+            <input id="airdrop-x" type="number" placeholder="X" style="width:95px;padding:7px;font-size:1em;border-radius:6px;border:1px solid #6ad44c;background:#272d2b;color:#fff;margin-right:12px;">
+            <input id="airdrop-y" type="number" placeholder="Y" style="width:95px;padding:7px;font-size:1em;border-radius:6px;border:1px solid #6ad44c;background:#272d2b;color:#fff;">
+        </div>
+        <button id="airdrop-add-btn" style="font-size:1.08em;padding:7px 18px;border-radius:6px;background:#6ad44c;color:#101f12;font-weight:bold;cursor:pointer;border:none;letter-spacing:1px;margin-right:15px;">Add</button>
+        <button id="airdrop-cancel-btn" style="padding:7px 16px;border-radius:6px;background:#353535;color:#ccc;font-weight:normal;cursor:pointer;border:none;letter-spacing:1px;">Cancel</button>
+    `;
+
+    document.body.appendChild(popup);
+
+    const xInput = document.getElementById('airdrop-x');
+    const yInput = document.getElementById('airdrop-y');
+    xInput.focus();
+
+    function closePopup() {
+        let p = document.getElementById('add-airdrop-popup');
+        if (p) p.remove();
+    }
+    document.getElementById('airdrop-cancel-btn').onclick = closePopup;
+
+    function addNow() {
+        // Retrieve numbers
+        let gx = parseFloat(xInput.value), gy = parseFloat(yInput.value);
+        if (isNaN(gx) || isNaN(gy)) {
+            xInput.style.borderColor = yInput.style.borderColor = '#d44c4c';
+            setTimeout(() => { xInput.style.borderColor = "#6ad44c"; yInput.style.borderColor = "#6ad44c"; }, 950);
+            xInput.focus();
+            return;
+        }
+        closePopup();
+
+        let mp = getPixelFromGame(gx, gy) || { x: mapImg.width / 2, y: mapImg.height / 2 };
+        let mark = {
+            x: mp.x,
+            y: mp.y,
+            type: 'AIRDROP',
+            label: `Airdrop [${gx}, ${gy}]`,
+            gx,
+            gy,
+            timestamp: Date.now()
+        };
+        markers.push(mark);
+        saveMarkers();
+        let player = markers.find(m => m.type === 'PLAYER');
+        if (player) {
+            updateTacticalHUD(player, mark);
+        } else {
+            pendAir = true;
+            isWaitLoc = true;
             let z = 1.2;
-            let tx = (canvas.width/2)-(mark.x*z);
-            let ty = (canvas.height/2)-(mark.y*z);
+            let tx = (canvas.width / 2) - (mark.x * z);
+            let ty = (canvas.height / 2) - (mark.y * z);
             animateMapTo(tx, ty, z, 800);
             window._setHudBox("<div style='font-weight:bold;'>Airdrop added.<br>Tap your position.</div>");
         }
     }
+
+    xInput.addEventListener('keydown', function(e){
+        if (e.key === 'Enter') yInput.focus();
+    });
+    yInput.addEventListener('keydown', function(e){
+        if (e.key === 'Enter') addNow();
+    });
+    document.getElementById('airdrop-add-btn').onclick = addNow;
+
+    // Optional: close popup on ESC
+    popup.addEventListener('keydown', function(e){
+        if (e.key === 'Escape') closePopup();
+    });
+    // Ensure keydown works for popup
+    setTimeout(() => popup.focus(), 50);
 }
 function findNearest(){
     pendAir=0;isWaitLoc=1;activeTarget=null;
@@ -373,61 +470,209 @@ function saveMarkers(){
     }
     localStorage.setItem('savedMarkers',JSON.stringify(markers));
 }
-function render(){
-    let k=0.08;
-    if(!isDrag){view.zoom+=(targetView.zoom-view.zoom)*k;view.x+=(targetView.x-view.x)*k;view.y+=(targetView.y-view.y)*k;}
-    ctx.setTransform(1,0,0,1,0,0);ctx.clearRect(0,0,canvas.width,canvas.height);ctx.translate(view.x,view.y);ctx.scale(view.zoom,view.zoom);
-    ctx.drawImage(mapImg,0,0);
-    let mapMouse=screenToMap(mouseX,mouseY), hovered=getMarkerAtPos(mapMouse.x,mapMouse.y), g=getGameCoords(mapMouse.x,mapMouse.y);
-    markers.forEach(m=>{
-        let pulsing=(m===activeTarget&&Date.now()<pulseEndTime),always=(m.type==="PLAYER"||m.type==="AIRDROP"||pulsing);
-        if(showMarkers||always){
-            if(pulsing){
-                let pulse=(Math.sin(Date.now()/150)+1)/2;
-                ctx.beginPath();ctx.arc(m.x,m.y,(10+pulse*30)/view.zoom,0,2*Math.PI);
-                ctx.strokeStyle=colors[m.type];ctx.lineWidth=4/view.zoom;ctx.stroke();
+function render() {
+    let k = 0.08;
+    if (!isDrag) {
+        view.zoom += (targetView.zoom - view.zoom) * k;
+        view.x += (targetView.x - view.x) * k;
+        view.y += (targetView.y - view.y) * k;
+    }
+
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.translate(view.x, view.y);
+    ctx.scale(view.zoom, view.zoom);
+
+    // 1. Draw Map
+    ctx.drawImage(mapImg, 0, 0);
+
+    // 2. Draw FULL Plane Path (The whole loop)
+    ctx.beginPath();
+    ctx.setLineDash([15 / view.zoom, 15 / view.zoom]);
+    ctx.strokeStyle = "rgba(58, 150, 221, 0.6)";
+    ctx.lineWidth = 2 / view.zoom;
+
+    for (let i = 0; i < PLANE_WAYPOINTS.length; i++) {
+        const p0 = PLANE_WAYPOINTS[(i - 1 + 27) % 27];
+        const p1 = PLANE_WAYPOINTS[i];
+        const p2 = PLANE_WAYPOINTS[(i + 1) % 27];
+        const p3 = PLANE_WAYPOINTS[(i + 2) % 27];
+
+        for (let t = 0; t <= 1; t += 0.2) {
+            const pt = getSplinePoint(t, p0, p1, p2, p3);
+            const pix = getPixelFromGame(pt.x, pt.y);
+            if (i === 0 && t === 0) ctx.moveTo(pix.x, pix.y);
+            else ctx.lineTo(pix.x, pix.y);
+        }
+    }
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // 3. Draw The Plane (angle matches the tangent of the spline path at current position)
+    if (window.currentPlanePos) {
+        const elapsed = (Date.now() - planeTimeOffset) % PLANE_CYCLE_MS;
+        const total = PLANE_WAYPOINTS.length;
+        const fIndex = (elapsed / PLANE_CYCLE_MS) * total;
+        const i = Math.floor(fIndex), t = fIndex - i;
+
+        // Points for spline tangent calculation
+        const p0 = PLANE_WAYPOINTS[(i - 1 + total) % total];
+        const p1 = PLANE_WAYPOINTS[i % total];
+        const p2 = PLANE_WAYPOINTS[(i + 1) % total];
+        const p3 = PLANE_WAYPOINTS[(i + 2) % total];
+
+        // Calculate tangent at current spline t using Catmull-Rom derivative
+        function getSplineTangent(t, p0, p1, p2, p3) {
+            // Catmull-Rom derivative formula
+            const t2 = t * t;
+            return {
+                x: 0.5 * ((-p0.x + p2.x) + 2*(2*p0.x - 5*p1.x + 4*p2.x - p3.x) * t + 3*(-p0.x + 3*p1.x - 3*p2.x + p3.x) * t2),
+                y: 0.5 * ((-p0.y + p2.y) + 2*(2*p0.y - 5*p1.y + 4*p2.y - p3.y) * t + 3*(-p0.y + 3*p1.y - 3*p2.y + p3.y) * t2)
+            };
+        }
+
+        const tangent = getSplineTangent(t, p0, p1, p2, p3);
+        // To map pixels, need to convert tangent vector from game coordinates to pixel units:
+        // Compute mapping scaling via game-to-pixel for (0,0) and (1,1) delta (use scaleX, scaleY)
+        let angle = Math.atan2(tangent.y * (mapConfig.scaleY || 1), tangent.x * (mapConfig.scaleX || 1));
+
+        const pPix = getPixelFromGame(window.currentPlanePos.x, window.currentPlanePos.y);
+        if (pPix) {
+            ctx.save();
+            ctx.translate(pPix.x, pPix.y);
+            ctx.rotate(angle); // Rotate so plane faces tangent direction
+            ctx.font = `${24 / view.zoom}px serif`;
+            ctx.textAlign = "center";
+            ctx.textBaseline = "middle";
+            ctx.fillText(" ", 0, 0);
+            ctx.restore();
+        }
+    }
+
+    // 4. Draw All Markers (Restored original colors and pulsing)
+    let mapMouse = screenToMap(mouseX, mouseY), 
+        hovered = getMarkerAtPos(mapMouse.x, mapMouse.y), 
+        g = getGameCoords(mapMouse.x, mapMouse.y);
+
+    markers.forEach(m => {
+        let pulsing = (m === activeTarget && Date.now() < pulseEndTime),
+            always = (m.type === "PLAYER" || m.type === "AIRDROP" || pulsing);
+        
+        if (showMarkers || always) {
+            // Pulse Ring
+            if (pulsing) {
+                let pulse = (Math.sin(Date.now() / 150) + 1) / 2;
+                ctx.beginPath();
+                ctx.arc(m.x, m.y, (10 + pulse * 30) / view.zoom, 0, 2 * Math.PI);
+                ctx.strokeStyle = colors[m.type] || "#fff";
+                ctx.lineWidth = 4 / view.zoom;
+                ctx.stroke();
             }
-            ctx.beginPath();ctx.arc(m.x,m.y,8/view.zoom,0,2*Math.PI);
-            ctx.fillStyle=colors[m.type];ctx.fill();
-            ctx.strokeStyle=pulsing?"#fff":"rgba(255,255,255,0.8)";
-            ctx.lineWidth=2/view.zoom;ctx.stroke();
-            if(showMarkers||always){
-                if(m===hovered||pulsing||m.type==="PLAYER"){
-                    ctx.font=`bold ${14/view.zoom}px sans-serif`;
-                    ctx.fillStyle="#fff";
-                    ctx.fillText(getCleanName(m.label),m.x+12/view.zoom,m.y-12/view.zoom);
-                }
+            // Marker Circle
+            ctx.beginPath();
+            ctx.arc(m.x, m.y, 8 / view.zoom, 0, 2 * Math.PI);
+            ctx.fillStyle = colors[m.type] || "#fff";
+            ctx.fill();
+            ctx.strokeStyle = pulsing ? "#fff" : "rgba(255,255,255,0.8)";
+            ctx.lineWidth = 2 / view.zoom;
+            ctx.stroke();
+
+            // Label
+            if (m === hovered || pulsing || m.type === "PLAYER") {
+                ctx.font = `bold ${14 / view.zoom}px sans-serif`;
+                ctx.textAlign = "left";
+                ctx.fillStyle = "#fff";
+                ctx.shadowBlur = 4; ctx.shadowColor = "black";
+                ctx.fillText(getCleanName(m.label), m.x + 12 / view.zoom, m.y - 12 / view.zoom);
+                ctx.shadowBlur = 0;
             }
         }
     });
-    ctx.setTransform(1,0,0,1,0,0);
-    let hud=isWaitLoc?"TAP YOUR POSITION":`X: ${g.x}, Y: ${g.y}`,hudColor=isWaitLoc?"#0ff":"#6AD44C";
-    if(hovered&&hovered.gx!==undefined){hud=`LOCKED: ${hovered.gx}, ${hovered.gy}`;hudColor=colors[hovered.type];}
-    ctx.fillStyle="rgba(0,0,0,0.8)";ctx.fillRect(mouseX+15,mouseY+15,ctx.measureText(hud).width+12,25);
-    ctx.fillStyle=hudColor;ctx.font="bold 12px sans-serif";ctx.fillText(hud,mouseX+21,mouseY+32);
+
+    // 5. HUD Overlay
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    let hud = isWaitLoc ? "TAP YOUR POSITION" : `X: ${g.x}, Y: ${g.y}`, 
+        hudColor = isWaitLoc ? "#0ff" : "#6AD44C";
+    
+    if (hovered && hovered.gx !== undefined) {
+        hud = `LOCKED: ${hovered.gx}, ${hovered.gy}`;
+        hudColor = colors[hovered.type] || "#fff";
+    }
+    
+    ctx.fillStyle = "rgba(0,0,0,0.8)";
+    ctx.fillRect(mouseX + 15, mouseY + 15, ctx.measureText(hud).width + 12, 25);
+    ctx.fillStyle = hudColor;
+    ctx.font = "bold 12px sans-serif";
+    ctx.fillText(hud, mouseX + 21, mouseY + 32);
+
     requestAnimationFrame(render);
 }
 
 // --- Mouse Input
-canvas.addEventListener('mousedown',e=>{
-    const r=canvas.getBoundingClientRect(), sx=e.clientX-r.left, sy=e.clientY-r.top, mp=screenToMap(sx,sy),m=getMarkerAtPos(mp.x,mp.y);
-    if(e.button===0){
-        if(isWaitLoc){
-            let my=getGameCoords(mp.x,mp.y),p={x:mp.x,y:mp.y,type:'PLAYER',label:"Me",gx:my.x,gy:my.y,timestamp:Date.now()};
-            markers=markers.filter(m=>m.type!=='PLAYER');markers.push(p);isWaitLoc=0;
-            if(pendAir){
-                let lastDrop=markers.filter(m=>m.type==='AIRDROP').pop();
-                if(lastDrop)updateTacticalHUD(p,lastDrop);pendAir=0;
-            }else showObjectiveMenu();
-            saveMarkers();return;
+canvas.addEventListener('mousedown', e => {
+    const r = canvas.getBoundingClientRect(), 
+          sx = e.clientX - r.left, 
+          sy = e.clientY - r.top, 
+          mp = screenToMap(sx, sy), 
+          m = getMarkerAtPos(mp.x, mp.y);
+
+    if (e.button === 0) {
+        // --- 1. PRIORITY: PLANE SYNC ---
+        if (typeof isWaitingForPlaneSync !== 'undefined' && isWaitingForPlaneSync) {
+            let clickedGame = getGameCoords(mp.x, mp.y);
+            if (typeof handlePlaneSyncClick === 'function') {
+                handlePlaneSyncClick(clickedGame.x, clickedGame.y);
+            }
+            return; 
+        }
+
+        // --- 2. PLAYER PLACEMENT / OBJECTIVES ---
+        if (isWaitLoc) {
+            let my = getGameCoords(mp.x, mp.y);
+            
+            // Check if user clicked specifically on the plane icon
+            let isLocked = (m && m.type === 'PLANE');
+            
+            let p = {
+                x: mp.x, 
+                y: mp.y, 
+                type: 'PLAYER', 
+                label: isLocked ? "Me (On Plane)" : "Me", 
+                gx: isLocked ? m.gx : my.x, 
+                gy: isLocked ? m.gy : my.y, 
+                isLockedToPlane: isLocked,
+                timestamp: Date.now()
+            };
+
+            markers = markers.filter(m => m.type !== 'PLAYER');
+            markers.push(p);
+            isWaitLoc = 0;
+
+            if (pendAir) {
+                let lastDrop = markers.filter(m => m.type === 'AIRDROP').pop();
+                if (lastDrop) updateTacticalHUD(p, lastDrop);
+                pendAir = 0;
+            } else {
+                showObjectiveMenu();
+            }
+            saveMarkers();
+            return;
         }
     }
-    if(e.button===1||(e.button===0)){isDrag=1;lastX=e.clientX;lastY=e.clientY;}
-    if(e.button===2){
+
+    // --- 3. DRAGGING & DELETING ---
+    if (e.button === 1 || (e.button === 0)) {
+        isDrag = 1; 
+        lastX = e.clientX; 
+        lastY = e.clientY;
+    }
+    
+    if (e.button === 2) {
         e.preventDefault();
-        if(m&&(m.type==='AIRDROP'||m.type==='PLAYER')){
-            markers=markers.filter(mark=>mark!==m);
-            if(activeTarget===m)activeTarget=null;
+        // Allow deleting Airdrops or Player markers
+        if (m && (m.type === 'AIRDROP' || m.type === 'PLAYER')) {
+            markers = markers.filter(mark => mark !== m);
+            if (activeTarget === m) activeTarget = null;
             saveMarkers();
         }
     }
@@ -454,3 +699,99 @@ mapImg.onload=()=>{
     centerToZeroZoom(0);
     render();
 };
+
+/** --- PLANE DATA ENGINE (The "Brain" for the Render) --- **/
+const PLANE_CYCLE_MS = 133230;
+const PLANE_WAYPOINTS = [
+    {x: 918, y: -1585}, {x: 461, y: -1625}, {x: 2, y: -1614},
+    {x: -445, y: -1523}, {x: -894, y: -1426}, {x: -1343, y: -1327},
+    {x: -1779, y: -1196}, {x: -2203, y: -1016}, {x: -2546, y: -726},
+    {x: -2500, y: -276}, {x: -2309, y: 141}, {x: -2042, y: 509},
+    {x: -1615, y: 671}, {x: -1200, y: 861}, {x: -826, y: 1127},
+    {x: -430, y: 1355}, {x: -9, y: 1540}, {x: 428, y: 1653},
+    {x: 860, y: 1607}, {x: 1282, y: 1403}, {x: 1528, y: 1014},
+    {x: 1708, y: 591}, {x: 1842, y: 149}, {x: 1846, y: -304},
+    {x: 1708, y: -741}, {x: 1506, y: -1154}, {x: 1209, y: -1502}
+];
+
+let planeTimeOffset = 0;
+let isWaitingForPlaneSync = false;
+
+function getSplinePoint(t, p0, p1, p2, p3) {
+    const t2 = t * t, t3 = t2 * t;
+    return {
+        x: 0.5 * ((2 * p1.x) + (-p0.x + p2.x) * t + (2 * p0.x - 5 * p1.x + 4 * p2.x - p3.x) * t2 + (-p0.x + 3 * p1.x - 3 * p2.x + p3.x) * t3),
+        y: 0.5 * ((2 * p1.y) + (-p0.y + p2.y) * t + (2 * p0.y - 5 * p1.y + 4 * p2.y - p3.y) * t2 + (-p0.y + 3 * p1.y - 3 * p2.y + p3.y) * t3)
+    };
+}
+
+// Function to calculate the angle of the plane tangent in game coords (for external uses)
+function getPlaneDirectionAngleRad() {
+    const elapsed = (Date.now() - planeTimeOffset) % PLANE_CYCLE_MS;
+    const totalPoints = PLANE_WAYPOINTS.length;
+    const fIndex = (elapsed / PLANE_CYCLE_MS) * totalPoints;
+    
+    // 1. Get CURRENT position in Pixels
+    const posNow = getLivePlanePosAt(fIndex);
+    const pixNow = getPixelFromGame(posNow.x, posNow.y);
+    
+    // 2. Get FUTURE position (50ms ahead) in Pixels
+    // We use a tiny time offset to see where the pixel path is going
+    const elapsedAhead = (elapsed + 50) % PLANE_CYCLE_MS;
+    const fIndexAhead = (elapsedAhead / PLANE_CYCLE_MS) * totalPoints;
+    const posAhead = getLivePlanePosAt(fIndexAhead);
+    const pixAhead = getPixelFromGame(posAhead.x, posAhead.y);
+
+    if (!pixNow || !pixAhead) return 0;
+
+    // 3. Calculate angle based on PIXEL movement
+    // This ignores game-scale distortion and follows the actual screen line
+    return Math.atan2(pixAhead.y - pixNow.y, pixAhead.x - pixNow.x);
+}
+
+// Helper to ensure we use the same Spline math for both points
+function getLivePlanePosAt(fIndex) {
+    const totalPoints = PLANE_WAYPOINTS.length;
+    const i = Math.floor(fIndex);
+    const t = fIndex - i;
+    const p0 = PLANE_WAYPOINTS[(i - 1 + totalPoints) % totalPoints];
+    const p1 = PLANE_WAYPOINTS[i % totalPoints];
+    const p2 = PLANE_WAYPOINTS[(i + 1) % totalPoints];
+    const p3 = PLANE_WAYPOINTS[(i + 2) % totalPoints];
+    return getSplinePoint(t, p0, p1, p2, p3);
+}
+
+// This function runs continuously to update the variables in your render()
+function updatePlaneLogic() {
+    const elapsed = (Date.now() - planeTimeOffset) % PLANE_CYCLE_MS;
+    const total = PLANE_WAYPOINTS.length;
+    const fIndex = (elapsed / PLANE_CYCLE_MS) * total;
+    const i = Math.floor(fIndex), t = fIndex - i;
+
+    const p0 = PLANE_WAYPOINTS[(i - 1 + total) % total];
+    const p1 = PLANE_WAYPOINTS[i % total];
+    const p2 = PLANE_WAYPOINTS[(i + 1) % total];
+    const p3 = PLANE_WAYPOINTS[(i + 2) % total];
+
+    window.currentPlanePos = getSplinePoint(t, p0, p1, p2, p3);
+    window.planePath = [p1, p2];
+
+    requestAnimationFrame(updatePlaneLogic);
+}
+
+// Logic for syncing the plane when you click in sync mode
+window.handlePlaneSyncClick = function(gx, gy) {
+    let bestT = 0, minDist = Infinity;
+    for (let i = 0; i < 27; i++) {
+        for (let t = 0; t <= 1; t += 0.1) {
+            const pt = getSplinePoint(t, PLANE_WAYPOINTS[(i-1+27)%27], PLANE_WAYPOINTS[i], PLANE_WAYPOINTS[(i+1)%27], PLANE_WAYPOINTS[(i+2)%27]);
+            const d = Math.hypot(gx - pt.x, gy - pt.y);
+            if (d < minDist) { minDist = d; bestT = (i + t) / 27; }
+        }
+    }
+    planeTimeOffset = Date.now() - (bestT * PLANE_CYCLE_MS);
+    isWaitingForPlaneSync = false;
+};
+
+// Start the engine
+updatePlaneLogic();
